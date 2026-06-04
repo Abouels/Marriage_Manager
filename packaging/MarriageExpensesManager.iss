@@ -18,7 +18,7 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 
 [Files]
-Source: "..\dist\MarriageExpensesManager\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "portable.flag,app_data\*"
+Source: "..\dist\MarriageExpensesManager\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Excludes: "portable.flag,app_data,app_data\*"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
