@@ -2,7 +2,7 @@
 
 # مدير مصاريف الزواج
 
-تطبيق سطح مكتب عربي لإدارة مصاريف تجهيز الشقة والزواج، مبني بـ Python و Tkinter و SQLite. البرنامج يحفظ البيانات محليا على الجهاز، ويدعم البنود، الفواتير، التوريدات، التسديدات، السلف، التقارير، والنسخ الاحتياطي.
+تطبيق سطح مكتب عربي لإدارة مصاريف تجهيز الشقة والزواج. البرنامج يحفظ البيانات محليا على جهازك، ويدعم البنود، الفواتير، التوريدات، التسديدات، السلف، التقارير، والنسخ الاحتياطي.
 
 </div>
 
@@ -15,6 +15,47 @@
 
 <div dir="rtl" align="right">
 
+## التحميل والتشغيل
+
+لو أنت مستخدم عادي، لا تحتاج تثبيت Python ولا تحميل أي مكتبات برمجة. حمل النسخة الجاهزة من صفحة:
+
+[GitHub Releases](https://github.com/Abouels/Marriage_Manager/releases)
+
+كل إصدار رسمي يوفر اختيارين:
+
+| الملف | مناسب لمن؟ | طريقة التشغيل |
+| --- | --- | --- |
+| `MarriageExpensesManager_Setup_*.exe` | لو عايز تثبيت عادي على ويندوز | حمل الملف، افتحه، واتبع خطوات التثبيت |
+| `MarriageExpensesManager_Portable_*.zip` | لو عايز نسخة تفتح مباشرة بدون تثبيت | حمل الملف، فك الضغط، ثم افتح `MarriageExpensesManager.exe` |
+
+### تثبيت نسخة Setup
+
+1. افتح صفحة [Releases](https://github.com/Abouels/Marriage_Manager/releases).
+2. حمل ملف `MarriageExpensesManager_Setup_*.exe` من أحدث إصدار.
+3. افتح ملف التسطيب.
+4. بعد انتهاء التثبيت افتح البرنامج من Start Menu أو من الاختصار على سطح المكتب.
+
+بيانات نسخة التسطيب تحفظ داخل مجلد المستخدم في ويندوز:
+
+```text
+%LOCALAPPDATA%\MarriageExpensesManager\app_data
+```
+
+### تشغيل نسخة Portable
+
+1. افتح صفحة [Releases](https://github.com/Abouels/Marriage_Manager/releases).
+2. حمل ملف `MarriageExpensesManager_Portable_*.zip` من أحدث إصدار.
+3. فك الضغط في أي مكان مناسب، مثل سطح المكتب أو فلاشة USB.
+4. افتح `MarriageExpensesManager.exe` من داخل المجلد بعد فك الضغط.
+
+بيانات النسخة المحمولة تحفظ بجانب ملف التشغيل داخل نفس المجلد:
+
+```text
+MarriageExpensesManager/app_data
+```
+
+> ملاحظة: لو ظهرت رسالة Windows SmartScreen لأن البرنامج غير موقع رقميا بعد، اختر `More info` ثم `Run anyway` إذا كنت حملت الملف من صفحة Releases الرسمية.
+
 ## المميزات
 
 | القسم | الوصف |
@@ -25,7 +66,7 @@
 | التوريدات | تسجيل المبالغ المستلمة وطريقة الدفع والتاريخ والملاحظات |
 | التسديدات | متابعة المدفوعات لجهات الدفع المختلفة |
 | السلف | تسجيل السلف بعملات متعددة ومتابعة المسدد والمتبقي |
-| التقارير | تصدير Excel وتقارير PDF عند توفر المكتبات المطلوبة |
+| التقارير | تصدير Excel وتقارير PDF |
 | النسخ الاحتياطي | تصدير واستيراد نسخة احتياطية من بيانات البرنامج |
 
 ## لقطات من الواجهة
@@ -47,22 +88,9 @@
   </tr>
 </table>
 
-## تحميل نسخة جاهزة
+## للمطورين
 
-لو أنت مستخدم عادي، لا تحتاج Python ولا أي مكتبات برمجة. حمل النسخة الجاهزة من صفحة GitHub Releases.
-
-كل إصدار رسمي يحتوي على ملفين:
-
-| الملف | الاستخدام |
-| --- | --- |
-| `MarriageExpensesManager_Setup_*.exe` | نسخة تسطيب عادية لويندوز |
-| `MarriageExpensesManager_Portable_*.zip` | نسخة Portable تعمل مباشرة بعد فك الضغط |
-
-النسخة المثبتة تحفظ بياناتك في مجلد المستخدم داخل ويندوز، أما النسخة المحمولة فتحفظ بياناتها بجانب ملف التشغيل داخل نفس المجلد.
-
-## تشغيل المشروع من السورس
-
-هذا القسم للمطورين فقط أو لمن يريد تعديل الكود. المستخدم العادي يفضل تحميل الملفات الجاهزة من Releases.
+هذا القسم فقط لمن يريد تشغيل السورس أو تعديل الكود. المستخدم العادي يفضل تحميل النسخة الجاهزة من Releases.
 
 ثبت المتطلبات:
 
@@ -82,73 +110,26 @@ py app.py
 py app.pyw
 ```
 
-## الفرق بين app.py و app.pyw
+`app.py` هو ملف التطبيق الأساسي وفيه الكود والمنطق والواجهة.  
+`app.pyw` مجرد launcher صغير يستدعي `main()` من `app.py` لتشغيل البرنامج على ويندوز بدون نافذة Console.
 
-`app.py` هو ملف التطبيق الأساسي وفيه كل الكود والمنطق والواجهة. استخدمه أثناء التطوير لأنه يظهر الأخطاء في الـ Console.
+## إصدار نسخة رسمية
 
-`app.pyw` مجرد launcher صغير يستدعي `main()` من `app.py`. وجوده مهم لويندوز ولـ PyInstaller لأنه يشغل البرنامج بدون نافذة Console سوداء. لا تكرر الكود داخله.
-
-## بناء نسخة Portable للمطورين
-
-يشترط وجود Python على جهاز المطور فقط. السكربت يثبت PyInstaller إذا لم يكن موجودا، ثم يبني نسخة جاهزة داخل `dist`.
+النسخ الجاهزة للمستخدمين يتم بناؤها تلقائيا عبر GitHub Actions عند إنشاء tag مثل:
 
 ```powershell
-.\build_portable.ps1
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-الناتج:
+بعد دفع الـ tag، سيقوم GitHub Actions ببناء:
 
 ```text
-dist/MarriageExpensesManager/MarriageExpensesManager.exe
+MarriageExpensesManager_Setup_1.0.0.exe
+MarriageExpensesManager_Portable_v1.0.0.zip
 ```
 
-النسخة المحمولة تحتوي على `portable.flag` ومجلد `app_data` بجانب ملف التشغيل، لذلك تحفظ بيانات المستخدم داخل نفس مجلد البرنامج.
-
-## بناء نسخة Installer للمطورين
-
-ثبت Inno Setup 6 أولا، ثم شغل:
-
-```powershell
-.\build_installer.ps1
-```
-
-الناتج:
-
-```text
-dist/installer/
-```
-
-نسخة التسطيب تحفظ بيانات المستخدم في:
-
-```text
-%LOCALAPPDATA%\MarriageExpensesManager\app_data
-```
-
-## مسارات البيانات
-
-أثناء التطوير من السورس:
-
-```text
-app_data/
-```
-
-في النسخة المحمولة:
-
-```text
-MarriageExpensesManager/app_data/
-```
-
-في النسخة المثبتة:
-
-```text
-%LOCALAPPDATA%\MarriageExpensesManager\app_data
-```
-
-يمكن تغيير مسار البيانات بتعيين المتغير:
-
-```powershell
-$env:MARRIAGE_MANAGER_DATA_DIR="D:\MyData\MarriageExpenses"
-```
+ثم يرفق الملفات في صفحة GitHub Release الخاصة بالإصدار.
 
 ## هيكل المشروع
 
@@ -156,28 +137,28 @@ $env:MARRIAGE_MANAGER_DATA_DIR="D:\MyData\MarriageExpenses"
 apartment_manager/
 |-- app.py                         # التطبيق الأساسي
 |-- app.pyw                        # Launcher صامت لويندوز
-|-- requirements.txt               # المتطلبات
-|-- build_portable.ps1             # بناء نسخة Portable
-|-- build_installer.ps1            # بناء Installer عبر Inno Setup
+|-- requirements.txt               # متطلبات التطوير
+|-- build_portable.ps1             # بناء نسخة Portable للمطورين
+|-- build_installer.ps1            # بناء Installer للمطورين
 |-- packaging/
 |   |-- MarriageExpensesManager.spec
 |   `-- MarriageExpensesManager.iss
+|-- .github/workflows/
+|   `-- release-windows.yml        # بناء ملفات Releases تلقائيا
 |-- assets/
 |   |-- icons/
 |   `-- screenshots/
 `-- app_data/                      # بيانات محلية غير مرفوعة على GitHub
 ```
 
-## ملاحظات للمطورين
+## ملاحظات مهمة
 
 - لا ترفع `app_data` إلى GitHub لأنه يحتوي على قواعد بيانات وملفات مستخدمين.
 - عدل الواجهة والمنطق داخل `app.py` فقط، واترك `app.pyw` كـ launcher.
-- لإنشاء إصدار رسمي، اعمل tag مثل `v1.0.0` وادفعه إلى GitHub. GitHub Actions سيبني نسخة Portable وInstaller ويرفقهما في صفحة Release.
-- قبل النشر شغل:
+- قبل عمل إصدار رسمي، اختبر:
 
 ```powershell
 py -m py_compile app.py app.pyw
-.\build_portable.ps1
 ```
 
 ## صاحب المشروع
