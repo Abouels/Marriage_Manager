@@ -3,3 +3,10 @@ __pycache__/
 
 app_data/
 app_data_backup_*/
+app_data_before_restore_*/
+_restore_temp_*/
+
+build/
+dist/
+*.log
+*.zip
