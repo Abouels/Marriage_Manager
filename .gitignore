@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+
+app_data/
+app_data_backup_*/

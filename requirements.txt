@@ -1,0 +1,6 @@
+openpyxl
+Pillow
+tkinterdnd2
+reportlab
+arabic-reshaper
+python-bidi
