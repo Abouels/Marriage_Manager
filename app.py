@@ -33,12 +33,15 @@ except Exception:
 APP_TITLE = "مدير مصاريف الزواج"
 APP_SLUG = "MarriageExpensesManager"
 APP_VERSION = "1.0.0"
+APP_USER_MODEL_ID = "Abouels.MarriageExpensesManager"
 SOURCE_DIR = Path(__file__).resolve().parent
 IS_FROZEN = getattr(sys, "frozen", False)
 BASE_DIR = Path(sys.executable).resolve().parent if IS_FROZEN else SOURCE_DIR
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR)).resolve()
 ASSETS_DIR = RESOURCE_DIR / "assets"
 ICONS_DIR = ASSETS_DIR / "icons"
+APP_ICON_PNG = ASSETS_DIR / "app_icon.png"
+APP_ICON_ICO = ASSETS_DIR / "app_icon.ico"
 
 
 def get_data_dir():
@@ -1406,6 +1409,7 @@ class ApartmentCostsApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title(APP_TITLE)
+        self._set_app_icon()
         self.root.geometry("1580x960")
         self.root.minsize(980, 620)
         try:
@@ -1467,6 +1471,20 @@ class ApartmentCostsApp:
             return bool(self.root.winfo_exists())
         except tk.TclError:
             return False
+
+    def _set_app_icon(self):
+        self._app_icon_photo = None
+        try:
+            if APP_ICON_ICO.exists():
+                self.root.iconbitmap(default=str(APP_ICON_ICO))
+        except Exception:
+            pass
+        try:
+            if APP_ICON_PNG.exists():
+                self._app_icon_photo = tk.PhotoImage(file=str(APP_ICON_PNG))
+                self.root.iconphoto(True, self._app_icon_photo)
+        except Exception:
+            pass
 
     def _ensure_main_window_visible(self):
         try:
@@ -5647,6 +5665,11 @@ class ApartmentCostsApp:
 def main():
     try:
         ensure_dirs()
+        if os.name == "nt":
+            try:
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+            except Exception:
+                pass
         root = tk.Tk()
         if TkinterDnD is not None:
             try:

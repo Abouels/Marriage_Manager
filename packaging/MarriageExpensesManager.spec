@@ -4,6 +4,7 @@ from pathlib import Path
 
 block_cipher = None
 project_root = Path.cwd()
+app_icon = project_root / "assets" / "app_icon.ico"
 
 datas = [
     (str(project_root / "assets"), "assets"),
@@ -45,6 +46,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
+    icon=str(app_icon),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
