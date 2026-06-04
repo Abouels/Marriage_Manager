@@ -2,6 +2,7 @@
 import json
 import sqlite3
 import shutil
+import sys
 import uuid
 import webbrowser
 import zipfile
@@ -30,10 +31,30 @@ except Exception:
     DND_FILES = None
 
 APP_TITLE = "مدير مصاريف الزواج"
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "app_data"
-ASSETS_DIR = BASE_DIR / "assets"
+APP_SLUG = "MarriageExpensesManager"
+APP_VERSION = "1.0.0"
+SOURCE_DIR = Path(__file__).resolve().parent
+IS_FROZEN = getattr(sys, "frozen", False)
+BASE_DIR = Path(sys.executable).resolve().parent if IS_FROZEN else SOURCE_DIR
+RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR)).resolve()
+ASSETS_DIR = RESOURCE_DIR / "assets"
 ICONS_DIR = ASSETS_DIR / "icons"
+
+
+def get_data_dir():
+    override = os.environ.get("MARRIAGE_MANAGER_DATA_DIR")
+    if override:
+        return Path(override).expanduser().resolve()
+    portable_markers = (BASE_DIR / "portable.flag", BASE_DIR / "app_data")
+    if not IS_FROZEN or any(marker.exists() for marker in portable_markers):
+        return BASE_DIR / "app_data"
+    local_root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    if local_root:
+        return Path(local_root) / APP_SLUG / "app_data"
+    return Path.home() / "AppData" / "Local" / APP_SLUG / "app_data"
+
+
+DATA_DIR = get_data_dir()
 INVOICES_DIR = DATA_DIR / "invoices"
 LOAN_RECEIPTS_DIR = DATA_DIR / "loan_receipts"
 DB_PATH = DATA_DIR / "apartment_costs.db"
@@ -1417,12 +1438,16 @@ class ApartmentCostsApp:
             pass
         self._configure_style()
         self.user_name, self.other_party_name = self._load_or_prompt_party_names()
+        if not self._root_exists():
+            return
         self.party1_role, self.party2_role = load_party_roles()
         self.base_currency = load_base_currency()
         self.split_mode, self.party1_percent, self.party2_percent = load_split_settings()
         self.accounting_mode, self.wedding_policy = load_accounting_settings()
         self.payer_options = [self.user_name, self.other_party_name]
         self._ensure_initial_room_options()
+        if not self._root_exists():
+            return
         self.project_name = load_project_name()
         self.payment_targets = load_payment_targets()
         self.settings_window = None
@@ -1436,6 +1461,12 @@ class ApartmentCostsApp:
         self._bind_events()
         self.update_form_by_type()
         self.refresh_summary()
+
+    def _root_exists(self):
+        try:
+            return bool(self.root.winfo_exists())
+        except tk.TclError:
+            return False
 
     def _ensure_main_window_visible(self):
         try:
@@ -2049,6 +2080,12 @@ class ApartmentCostsApp:
         dialog.bind("<Return>", lambda event: save_names())
         self._fit_toplevel(dialog, 500, 720, 0.40, 0.96)
         self.root.wait_window(dialog)
+        if "names" not in result:
+            fallback_user = user_var.get().strip() or DEFAULT_USER_NAME
+            fallback_other = other_var.get().strip() or DEFAULT_OTHER_PARTY_NAME
+            if fallback_user == fallback_other:
+                fallback_other = DEFAULT_OTHER_PARTY_NAME
+            result["names"] = (fallback_user, fallback_other)
         return result["names"]
 
     def _ensure_initial_room_options(self):
@@ -3306,7 +3343,7 @@ class ApartmentCostsApp:
             with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
                 for path in DATA_DIR.rglob("*"):
                     if path.is_file() and path.resolve() != output_path:
-                        zf.write(path, path.relative_to(BASE_DIR))
+                        zf.write(path, Path("app_data") / path.relative_to(DATA_DIR))
             self.status_var.set(f"تم تصدير النسخة الاحتياطية: {Path(output).name}")
             messagebox.showinfo("تم", f"تم تصدير النسخة الاحتياطية بنجاح:\n{output}")
         except Exception as e:
@@ -3324,8 +3361,8 @@ class ApartmentCostsApp:
             "سيتم استبدال بيانات البرنامج الحالية بالنسخة المختارة.\nسيتم حفظ نسخة من البيانات الحالية قبل الاستبدال.\n\nهل تريد المتابعة؟",
         ):
             return
-        temp_dir = BASE_DIR / f"_restore_temp_{uuid.uuid4().hex}"
-        old_backup = BASE_DIR / f"app_data_before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        temp_dir = DATA_DIR.parent / f"_restore_temp_{uuid.uuid4().hex}"
+        old_backup = DATA_DIR.parent / f"app_data_before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         try:
             temp_dir.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(path, "r") as zf:
@@ -5601,8 +5638,10 @@ class ApartmentCostsApp:
         c.save()
 
     def on_close(self):
-        self.conn.close()
-        self.root.destroy()
+        if hasattr(self, "conn"):
+            self.conn.close()
+        if self._root_exists():
+            self.root.destroy()
 
 
 def main():
@@ -5615,8 +5654,13 @@ def main():
             except Exception:
                 pass
         app = ApartmentCostsApp(root)
-        root.protocol("WM_DELETE_WINDOW", app.on_close)
-        root.mainloop()
+        try:
+            root_exists = bool(root.winfo_exists())
+        except tk.TclError:
+            root_exists = False
+        if root_exists:
+            root.protocol("WM_DELETE_WINDOW", app.on_close)
+            root.mainloop()
     except Exception as e:
         try:
             ensure_dirs()
