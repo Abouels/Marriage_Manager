@@ -1,0 +1,62 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Validate Python sources
+        run: py -m py_compile app.py app.pyw
+
+      - name: Build portable app
+        shell: pwsh
+        run: .\build_portable.ps1
+
+      - name: Build installer
+        shell: pwsh
+        run: .\build_installer.ps1
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $Version = "${{ github.ref_name }}"
+          if ($Version -eq "") { $Version = "manual" }
+          $ZipPath = "dist\MarriageExpensesManager_Portable_$Version.zip"
+          Compress-Archive -Path "dist\MarriageExpensesManager\*" -DestinationPath $ZipPath -Force
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarriageExpensesManager-Windows
+          path: |
+            dist/MarriageExpensesManager_Portable_*.zip
+            dist/installer/*.exe
+
+      - name: Attach files to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/MarriageExpensesManager_Portable_*.zip
+            dist/installer/*.exe
