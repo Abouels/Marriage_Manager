@@ -1,5 +1,7 @@
 #define MyAppName "Marriage Expenses Manager"
+#ifndef MyAppVersion
 #define MyAppVersion "1.0.0"
+#endif
 #define MyAppPublisher "Eng. I. Abouelsaad"
 #define MyAppExeName "MarriageExpensesManager.exe"
 

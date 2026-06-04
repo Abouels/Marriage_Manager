@@ -29,19 +29,30 @@ jobs:
       - name: Validate Python sources
         run: py -m py_compile app.py app.pyw
 
+      - name: Resolve release version
+        id: version
+        shell: pwsh
+        run: |
+          $Version = "${{ github.ref_name }}"
+          if ("${{ github.ref_type }}" -ne "tag") {
+            $Version = "v1.0.0"
+          }
+          $InstallerVersion = $Version.TrimStart([char[]]"vV")
+          "version=$Version" >> $env:GITHUB_OUTPUT
+          "installer_version=$InstallerVersion" >> $env:GITHUB_OUTPUT
+
       - name: Build portable app
         shell: pwsh
         run: .\build_portable.ps1
 
       - name: Build installer
         shell: pwsh
-        run: .\build_installer.ps1
+        run: .\build_installer.ps1 -Version "${{ steps.version.outputs.installer_version }}"
 
       - name: Package portable zip
         shell: pwsh
         run: |
-          $Version = "${{ github.ref_name }}"
-          if ($Version -eq "") { $Version = "manual" }
+          $Version = "${{ steps.version.outputs.version }}"
           $ZipPath = "dist\MarriageExpensesManager_Portable_$Version.zip"
           Compress-Archive -Path "dist\MarriageExpensesManager\*" -DestinationPath $ZipPath -Force
 
