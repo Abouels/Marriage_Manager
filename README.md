@@ -19,6 +19,29 @@
 
 `Marriage Manager` يساعدك تسجل كل بند مالي في تجهيز الشقة والزفاف، وتعرف مين دفع، مين عليه، المتبقي كام، وإيه تفاصيل السلف والتوريدات. كل البيانات محفوظة محليا على جهازك داخل SQLite، بدون خادم أو تسجيل دخول.
 
+## لقطات من الواجهة
+
+### لوحة الإدارة الرئيسية
+
+<p align="center">
+  <img src="assets/screenshots/dashboard.png" alt="لوحة إدارة مصاريف الزواج" width="900">
+</p>
+
+### القوائم المالية
+
+<table>
+  <tr>
+    <td align="center">
+      <strong>التوريدات المسجلة</strong><br>
+      <img src="assets/screenshots/receipts.png" alt="قائمة التوريدات المسجلة" width="420">
+    </td>
+    <td align="center">
+      <strong>إدارة السلف</strong><br>
+      <img src="assets/screenshots/loans.png" alt="نافذة إدارة السلف" width="420">
+    </td>
+  </tr>
+</table>
+
 ## ماذا يفعل البرنامج؟
 
 | القسم | الوصف |
