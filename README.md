@@ -21,12 +21,13 @@
 
 [GitHub Releases](https://github.com/Abouels/Marriage_Manager/releases)
 
-كل إصدار رسمي يوفر اختيارين:
+كل إصدار رسمي يوفر اختيارات جاهزة حسب نظام التشغيل:
 
 | الملف | مناسب لمن؟ | طريقة التشغيل |
 | --- | --- | --- |
 | `MarriageExpensesManager_Setup_*.exe` | لو عايز تثبيت عادي على ويندوز | حمل الملف، افتحه، واتبع خطوات التثبيت |
 | `MarriageExpensesManager_Portable_*.zip` | لو عايز نسخة تفتح مباشرة بدون تثبيت | حمل الملف، فك الضغط، ثم افتح `MarriageExpensesManager.exe` |
+| `MarriageExpensesManager_macOS_*.zip` | لو عايز تشغيل البرنامج على macOS | حمل الملف، فك الضغط، ثم افتح `MarriageExpensesManager.app` |
 
 ### تثبيت نسخة Setup
 
@@ -55,6 +56,21 @@ MarriageExpensesManager/app_data
 ```
 
 > ملاحظة: لو ظهرت رسالة Windows SmartScreen لأن البرنامج غير موقع رقميا بعد، اختر `More info` ثم `Run anyway` إذا كنت حملت الملف من صفحة Releases الرسمية.
+
+### تشغيل نسخة macOS
+
+1. افتح صفحة [Releases](https://github.com/Abouels/Marriage_Manager/releases).
+2. حمل ملف `MarriageExpensesManager_macOS_*.zip` من أحدث إصدار.
+3. فك الضغط.
+4. انقل `MarriageExpensesManager.app` إلى مجلد Applications أو افتحه من مكانه مباشرة.
+
+بيانات نسخة macOS تحفظ داخل:
+
+```text
+~/Library/Application Support/MarriageExpensesManager/app_data
+```
+
+> ملاحظة: النسخة غير موقعة رقميا بعد. لو macOS منع الفتح، افتح التطبيق بالضغط بزر الفأرة الأيمن ثم `Open`، أو من `System Settings > Privacy & Security` اختر السماح بفتح التطبيق.
 
 ## المميزات
 
@@ -127,6 +143,7 @@ git push origin v1.0.0
 ```text
 MarriageExpensesManager_Setup_1.0.0.exe
 MarriageExpensesManager_Portable_v1.0.0.zip
+MarriageExpensesManager_macOS_v1.0.0.zip
 ```
 
 ثم يرفق الملفات في صفحة GitHub Release الخاصة بالإصدار.
@@ -144,7 +161,8 @@ apartment_manager/
 |   |-- MarriageExpensesManager.spec
 |   `-- MarriageExpensesManager.iss
 |-- .github/workflows/
-|   `-- release-windows.yml        # بناء ملفات Releases تلقائيا
+|   |-- release-windows.yml        # بناء ملفات Windows تلقائيا
+|   `-- release-macos.yml          # بناء نسخة macOS تلقائيا
 |-- assets/
 |   |-- icons/
 |   `-- screenshots/

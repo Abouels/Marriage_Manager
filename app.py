@@ -51,6 +51,8 @@ def get_data_dir():
     portable_markers = (BASE_DIR / "portable.flag", BASE_DIR / "app_data")
     if not IS_FROZEN or any(marker.exists() for marker in portable_markers):
         return BASE_DIR / "app_data"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP_SLUG / "app_data"
     local_root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
     if local_root:
         return Path(local_root) / APP_SLUG / "app_data"
