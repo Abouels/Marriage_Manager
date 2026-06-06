@@ -3,12 +3,15 @@ import json
 import sqlite3
 import shutil
 import sys
+import threading
 import uuid
 import webbrowser
 import zipfile
 import ctypes
 from datetime import datetime
 from pathlib import Path
+from urllib import error as urlerror
+from urllib import request as urlrequest
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -98,6 +101,7 @@ WEDDING_EQUAL = "حفل الزفاف بالمناصفة"
 WEDDING_PARTY1 = "حفل الزفاف على الطرف الأول"
 WEDDING_PARTY2 = "حفل الزفاف على الطرف الثاني"
 WEDDING_POLICY_OPTIONS = [WEDDING_EQUAL, WEDDING_PARTY1, WEDDING_PARTY2]
+SUPPORT_MESSAGE_TYPES = ["مشكلة تقنية", "طلب ميزة", "اقتراح تحسين", "ملاحظة عامة"]
 THUMB_SIZE = (280, 220)
 # Theme constants
 BG_APP = "#F3EEE3"
@@ -987,6 +991,17 @@ def save_project_name(project_name):
     save_config(data)
 
 
+def load_support_web_app_url():
+    data = load_config()
+    return str(data.get("support_web_app_url") or "").strip()
+
+
+def save_support_web_app_url(url):
+    data = load_config()
+    data["support_web_app_url"] = (url or "").strip()
+    save_config(data)
+
+
 def normalize_text_options(options, defaults):
     vals = []
     seen = set()
@@ -1435,6 +1450,7 @@ class ApartmentCostsApp:
         self.loan_form_window = None
         self.loans_view_window = None
         self.loan_payment_window = None
+        self.support_window = None
         self.editing_receipt_id = None
 
         self.style = ttk.Style()
@@ -2316,6 +2332,11 @@ class ApartmentCostsApp:
         self.selected_loan_payment_receipt_source = None
         self.current_payment_loan_id = None
         self.current_payment_loan_title = ""
+        self.support_name_var = tk.StringVar()
+        self.support_email_var = tk.StringVar()
+        self.support_type_var = tk.StringVar(value=SUPPORT_MESSAGE_TYPES[0])
+        self.support_subject_var = tk.StringVar()
+        self.support_sending_var = tk.BooleanVar(value=False)
 
     def _build_ui(self):
         self.main_canvas = tk.Canvas(self.root, bg=BG_APP, highlightthickness=0, bd=0)
@@ -2463,8 +2484,12 @@ class ApartmentCostsApp:
         self._add_sidebar_button(helper_panel, "استيراد نسخة", self.restore_backup)
 
         tk.Frame(sidebar, bg=SIDEBAR_BG).pack(fill="both", expand=True)
-        copyright_panel = tk.Frame(sidebar, bg=SIDEBAR_BG, padx=10, pady=8)
-        copyright_panel.pack(side="bottom", fill="x", pady=(4, 0))
+        bottom_panel = tk.Frame(sidebar, bg=SIDEBAR_BG, padx=10, pady=8)
+        bottom_panel.pack(side="bottom", fill="x", pady=(4, 0))
+        self._action_button(bottom_panel, "إبلاغ أو اقتراح", self.open_support_window, kind="gold", width=210, height=40).pack(fill="x", pady=(0, 8))
+
+        copyright_panel = tk.Frame(bottom_panel, bg=SIDEBAR_BG)
+        copyright_panel.pack(fill="x")
         tk.Frame(copyright_panel, bg="#D4C3A3", height=1).pack(fill="x", pady=(0, 6))
         tk.Label(copyright_panel, text="</>", bg=SIDEBAR_BG, fg=PRIMARY, font=(FONT_FAMILY, 10, "bold"), anchor="center", justify="center").pack(fill="x")
         tk.Label(copyright_panel, text=COPYRIGHT_NOTICE, bg=SIDEBAR_BG, fg=TEXT, font=(FONT_FAMILY, 7, "bold"), anchor="center", justify="center", wraplength=214).pack(fill="x", pady=(1, 0))
@@ -3168,6 +3193,156 @@ class ApartmentCostsApp:
             for target in self.payment_targets:
                 self.targets_listbox.insert("end", target)
 
+    def _ensure_support_window(self):
+        if self.support_window and self.support_window.winfo_exists():
+            return
+        w = tk.Toplevel(self.root)
+        self.support_window = w
+        w.title("إبلاغ أو اقتراح")
+        w.configure(bg=BG_APP)
+        w.withdraw()
+        w.protocol("WM_DELETE_WINDOW", w.withdraw)
+
+        c = self._popup_card(w, "إبلاغ أو اقتراح", padx=20, pady=18)
+        tk.Label(
+            c,
+            text="استخدم هذا النموذج لإرسال مشكلة تقنية، طلب ميزة، اقتراح تحسين، أو ملاحظة عامة.",
+            bg=SURFACE,
+            fg=TEXT_2,
+            font=(FONT_FAMILY, 10),
+            anchor="e",
+            justify="right",
+            wraplength=620,
+        ).pack(fill="x", pady=(0, 10))
+
+        form = ttk.Frame(c, style="Card.TFrame")
+        form.pack(fill="both", expand=True)
+        form.columnconfigure(0, weight=1)
+        form.columnconfigure(1, weight=1)
+        self._add_labeled_entry(form, "الاسم", self.support_name_var, 0, 1)
+        self._add_labeled_entry(form, "البريد الإلكتروني", self.support_email_var, 0, 0)
+        self._add_labeled_combobox(form, "نوع الرسالة", self.support_type_var, SUPPORT_MESSAGE_TYPES, 1, 1)
+        self._add_labeled_entry(form, "عنوان مختصر", self.support_subject_var, 1, 0)
+
+        details_frame = ttk.Frame(form, style="Card.TFrame")
+        details_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=7, pady=7)
+        ttk.Label(details_frame, text="التفاصيل", anchor="e", style="Field.TLabel").pack(fill="x", pady=(0, 4))
+        self.support_details_text = self._make_notes_widget(details_frame, rows=7)
+        self.support_details_text.pack(fill="both", expand=True, pady=(4, 10))
+
+        self.support_status_label = tk.Label(c, text="", bg=SURFACE, fg=TEXT_2, font=(FONT_FAMILY, 9), anchor="e", justify="right", wraplength=620)
+        self.support_status_label.pack(fill="x", pady=(2, 0))
+        actions = tk.Frame(c, bg=SURFACE)
+        actions.pack(fill="x", pady=(12, 0))
+        self.support_submit_button = self._action_button(actions, "إرسال", self.submit_support_message, width=112)
+        self.support_submit_button.pack(side="right", padx=4)
+        self._action_button(actions, "إغلاق", w.withdraw, kind="secondary", width=96).pack(side="right", padx=4)
+        self._fit_toplevel(w, 760, 620, 0.56, 0.78)
+
+    def open_support_window(self):
+        self._ensure_support_window()
+        self.support_status_label.configure(text="")
+        self._reveal_window(self.support_window)
+
+    def _set_support_form_enabled(self, enabled):
+        state = "normal" if enabled else "disabled"
+        for widget in (
+            getattr(self, "support_submit_button", None),
+            getattr(self, "support_details_text", None),
+        ):
+            if not widget:
+                continue
+            try:
+                widget.configure(state=state)
+            except Exception:
+                pass
+
+    def _support_payload(self):
+        details = self.support_details_text.get("1.0", "end-1c") if isinstance(getattr(self.support_details_text, "child", None), tk.Text) else self.support_details_text.get()
+        return {
+            "name": self.support_name_var.get().strip(),
+            "email": self.support_email_var.get().strip(),
+            "type": self.support_type_var.get().strip(),
+            "subject": self.support_subject_var.get().strip(),
+            "details": details.strip(),
+            "appName": APP_TITLE,
+            "appVersion": APP_VERSION,
+            "projectName": self.project_name,
+            "sentAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    def submit_support_message(self):
+        if self.support_sending_var.get():
+            return
+        url = load_support_web_app_url()
+        if not url:
+            messagebox.showwarning("إعداد ناقص", "من فضلك أضف رابط استقبال البلاغات من إعدادات البرنامج أولًا.")
+            return
+        payload = self._support_payload()
+        if not payload["name"]:
+            messagebox.showerror("بيانات ناقصة", "من فضلك أدخل الاسم.")
+            return
+        if "@" not in payload["email"] or "." not in payload["email"].split("@")[-1]:
+            messagebox.showerror("بيانات غير صحيحة", "من فضلك أدخل بريد إلكتروني صحيح.")
+            return
+        if payload["type"] not in SUPPORT_MESSAGE_TYPES:
+            messagebox.showerror("بيانات ناقصة", "من فضلك اختر نوع الرسالة.")
+            return
+        if not payload["subject"]:
+            messagebox.showerror("بيانات ناقصة", "من فضلك أدخل عنوانًا مختصرًا.")
+            return
+        if not payload["details"]:
+            messagebox.showerror("بيانات ناقصة", "من فضلك اكتب تفاصيل الرسالة.")
+            return
+
+        self.support_status_label.configure(text="جاري إرسال الرسالة...")
+        self.support_sending_var.set(True)
+        self._set_support_form_enabled(False)
+
+        def worker():
+            try:
+                body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                req = urlrequest.Request(
+                    url,
+                    data=body,
+                    headers={"Content-Type": "application/json; charset=utf-8"},
+                    method="POST",
+                )
+                with urlrequest.urlopen(req, timeout=25) as response:
+                    raw = response.read().decode("utf-8")
+                result = json.loads(raw or "{}")
+                if not result.get("ok"):
+                    raise RuntimeError(result.get("error") or "تعذر إرسال الرسالة.")
+                ticket_id = str(result.get("ticketId") or "").strip()
+                self.root.after(0, lambda: self._support_send_finished(ticket_id, None))
+            except (urlerror.URLError, TimeoutError) as exc:
+                message = f"تعذر الاتصال بخدمة استقبال البلاغات:\n{exc}"
+                self.root.after(0, lambda msg=message: self._support_send_finished("", msg))
+            except Exception as exc:
+                message = str(exc)
+                self.root.after(0, lambda msg=message: self._support_send_finished("", msg))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _support_send_finished(self, ticket_id, error_message):
+        self.support_sending_var.set(False)
+        self._set_support_form_enabled(True)
+        if error_message:
+            self.support_status_label.configure(text="فشل الإرسال. راجع الاتصال أو رابط الاستقبال.")
+            messagebox.showerror("فشل الإرسال", error_message)
+            return
+        if ticket_id:
+            self.support_status_label.configure(text=f"تم إرسال الرسالة بنجاح. رقم المتابعة: {ticket_id}")
+            messagebox.showinfo("تم الإرسال", f"تم استلام رسالتك بنجاح.\nرقم المتابعة: {ticket_id}")
+        else:
+            self.support_status_label.configure(text="تم إرسال الرسالة بنجاح.")
+            messagebox.showinfo("تم الإرسال", "تم استلام رسالتك بنجاح.")
+        self.support_subject_var.set("")
+        try:
+            self.support_details_text.delete("1.0", "end")
+        except Exception:
+            self.support_details_text.delete(0, "end")
+
     def _ensure_settings_window(self):
         if self.settings_window and self.settings_window.winfo_exists():
             return
@@ -3195,6 +3370,7 @@ class ApartmentCostsApp:
         self.settings_split_mode_var = tk.StringVar(value=self.split_mode)
         self.settings_party1_percent_var = tk.StringVar(value=f"{self.party1_percent:.0f}")
         self.settings_party2_percent_var = tk.StringVar(value=f"{self.party2_percent:.0f}")
+        self.settings_support_url_var = tk.StringVar(value=load_support_web_app_url())
         self._add_labeled_entry(form, "اسم المشروع", self.settings_project_var, 0, 0, colspan=2)
         self._add_labeled_entry(form, "اسم الطرف الأول", self.settings_user_var, 1, 1)
         self._add_labeled_entry(form, "اسم الطرف الثاني", self.settings_other_var, 1, 0)
@@ -3203,6 +3379,7 @@ class ApartmentCostsApp:
         self._add_labeled_combobox(form, "العملة الأساسية", self.settings_currency_var, LOAN_CURRENCIES, 3, 1)
         self._add_labeled_combobox(form, "نظام المحاسبة", self.settings_accounting_mode_var, ACCOUNTING_MODE_OPTIONS, 3, 0)
         self.settings_wedding_policy_frame = self._add_labeled_combobox(form, "حفل الزفاف في هذا النظام", self.settings_wedding_policy_var, WEDDING_POLICY_OPTIONS, 4, 0, colspan=2)
+        self._add_labeled_entry(form, "رابط استقبال البلاغات", self.settings_support_url_var, 5, 0, colspan=2)
         ttk.Label(
             form,
             text="اختيار نظام المحاسبة يغيّر الحقول والحسابات: الطرف الواحد، المناصفة 50/50، أو تحديد الطرف المسؤول لكل بند.",
@@ -3210,7 +3387,7 @@ class ApartmentCostsApp:
             justify="right",
             style="HeaderSub.TLabel",
             wraplength=620,
-        ).grid(row=5, column=0, columnspan=2, sticky="ew", padx=5, pady=(0, 8))
+        ).grid(row=6, column=0, columnspan=2, sticky="ew", padx=5, pady=(0, 8))
 
         def sync_settings_split(*_):
             mode, np1, np2 = normalize_split(self.settings_split_mode_var.get(), self.settings_party1_percent_var.get(), self.settings_party2_percent_var.get())
@@ -3253,6 +3430,7 @@ class ApartmentCostsApp:
         self.settings_currency_var.set(self.base_currency)
         self.settings_accounting_mode_var.set(self.accounting_mode)
         self.settings_wedding_policy_var.set(self.wedding_policy)
+        self.settings_support_url_var.set(load_support_web_app_url())
         self.update_settings_accounting_visibility()
         self.settings_split_mode_var.set(self.split_mode)
         self.settings_party1_percent_var.set(f"{self.party1_percent:.0f}")
@@ -3298,6 +3476,7 @@ class ApartmentCostsApp:
         save_base_currency(self.base_currency)
         save_split_settings(self.split_mode, self.party1_percent, self.party2_percent)
         save_accounting_settings(self.accounting_mode, self.wedding_policy)
+        save_support_web_app_url(self.settings_support_url_var.get())
         self.conn.execute("UPDATE records SET payer=? WHERE payer=?", (self.user_name, old_user))
         self.conn.execute("UPDATE records SET payer=? WHERE payer=?", (self.other_party_name, old_other))
         self.conn.commit()
