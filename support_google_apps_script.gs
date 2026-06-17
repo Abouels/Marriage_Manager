@@ -1,4 +1,4 @@
-const SUPPORT_RECIPIENT_EMAIL = "mm.sys.support@gmail.com";
+const SUPPORT_RECIPIENT_EMAIL = "your-support-email@example.com";
 const SHEET_NAME = "Support Requests";
 const SPREADSHEET_NAME = "Marriage Manager Support";
 const TICKET_PREFIX = "MM";

@@ -58,9 +58,22 @@ jobs:
           cp assets/app_icon.png build/icon.iconset/icon_512x512@2x.png
           iconutil -c icns build/icon.iconset -o assets/app_icon.icns
 
+      - name: Configure private support endpoint
+        shell: bash
+        env:
+          MARRIAGE_MANAGER_SUPPORT_URL: ${{ secrets.MARRIAGE_MANAGER_SUPPORT_URL }}
+        run: |
+          if [ -n "$MARRIAGE_MANAGER_SUPPORT_URL" ]; then
+            printf '%s' "$MARRIAGE_MANAGER_SUPPORT_URL" > support_endpoint.txt
+          fi
+
       - name: Build macOS app
         shell: bash
         run: |
+          ADD_DATA_ARGS=()
+          if [ -f support_endpoint.txt ]; then
+            ADD_DATA_ARGS+=(--add-data "support_endpoint.txt:.")
+          fi
           pyinstaller \
             --noconfirm \
             --clean \
@@ -68,6 +81,7 @@ jobs:
             --name MarriageExpensesManager \
             --icon assets/app_icon.icns \
             --add-data "assets:assets" \
+            "${ADD_DATA_ARGS[@]}" \
             --hidden-import PIL._tkinter_finder \
             --hidden-import tkinterdnd2 \
             --hidden-import openpyxl \

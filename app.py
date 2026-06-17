@@ -102,7 +102,7 @@ WEDDING_PARTY1 = "حفل الزفاف على الطرف الأول"
 WEDDING_PARTY2 = "حفل الزفاف على الطرف الثاني"
 WEDDING_POLICY_OPTIONS = [WEDDING_EQUAL, WEDDING_PARTY1, WEDDING_PARTY2]
 SUPPORT_MESSAGE_TYPES = ["مشكلة تقنية", "طلب ميزة", "اقتراح تحسين", "ملاحظة عامة"]
-DEFAULT_SUPPORT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbySIOKYlbhOYq0Nw8krRoP__lLIuFlkLSLPgMQk2zMk8al35uYTb4dHs-sy2l2f9sp0/exec"
+SUPPORT_ENDPOINT_FILE = RESOURCE_DIR / "support_endpoint.txt"
 THUMB_SIZE = (280, 220)
 # Theme constants
 BG_APP = "#F3EEE3"
@@ -993,14 +993,16 @@ def save_project_name(project_name):
 
 
 def load_support_web_app_url():
+    env_url = os.environ.get("MARRIAGE_MANAGER_SUPPORT_URL", "").strip()
+    if env_url:
+        return env_url
+    if SUPPORT_ENDPOINT_FILE.exists():
+        try:
+            return SUPPORT_ENDPOINT_FILE.read_text(encoding="utf-8").strip()
+        except Exception:
+            return ""
     data = load_config()
-    return str(data.get("support_web_app_url") or DEFAULT_SUPPORT_WEB_APP_URL).strip()
-
-
-def save_support_web_app_url(url):
-    data = load_config()
-    data["support_web_app_url"] = (url or "").strip()
-    save_config(data)
+    return str(data.get("support_web_app_url") or "").strip()
 
 
 def normalize_text_options(options, defaults):
@@ -3238,11 +3240,12 @@ class ApartmentCostsApp:
         self.support_submit_button = self._action_button(actions, "إرسال", self.submit_support_message, width=112)
         self.support_submit_button.pack(side="right", padx=4)
         self._action_button(actions, "إغلاق", w.withdraw, kind="secondary", width=96).pack(side="right", padx=4)
-        self._fit_toplevel(w, 760, 620, 0.56, 0.78)
+        self._fit_toplevel(w, 860, 760, 0.64, 0.90)
 
     def open_support_window(self):
         self._ensure_support_window()
         self.support_status_label.configure(text="")
+        self._fit_toplevel(self.support_window, 860, 760, 0.64, 0.90)
         self._reveal_window(self.support_window)
 
     def _set_support_form_enabled(self, enabled):
@@ -3280,7 +3283,7 @@ class ApartmentCostsApp:
             return
         url = load_support_web_app_url()
         if not url:
-            messagebox.showwarning("إعداد ناقص", "من فضلك أضف رابط استقبال البلاغات من إعدادات البرنامج أولًا.")
+            messagebox.showwarning("الخدمة غير مفعلة", "خدمة استقبال البلاغات غير مفعلة في هذه النسخة.")
             return
         payload = self._support_payload()
         if not payload["name"]:
@@ -3374,7 +3377,6 @@ class ApartmentCostsApp:
         self.settings_split_mode_var = tk.StringVar(value=self.split_mode)
         self.settings_party1_percent_var = tk.StringVar(value=f"{self.party1_percent:.0f}")
         self.settings_party2_percent_var = tk.StringVar(value=f"{self.party2_percent:.0f}")
-        self.settings_support_url_var = tk.StringVar(value=load_support_web_app_url())
         self._add_labeled_entry(form, "اسم المشروع", self.settings_project_var, 0, 0, colspan=2)
         self._add_labeled_entry(form, "اسم الطرف الأول", self.settings_user_var, 1, 1)
         self._add_labeled_entry(form, "اسم الطرف الثاني", self.settings_other_var, 1, 0)
@@ -3383,7 +3385,6 @@ class ApartmentCostsApp:
         self._add_labeled_combobox(form, "العملة الأساسية", self.settings_currency_var, LOAN_CURRENCIES, 3, 1)
         self._add_labeled_combobox(form, "نظام المحاسبة", self.settings_accounting_mode_var, ACCOUNTING_MODE_OPTIONS, 3, 0)
         self.settings_wedding_policy_frame = self._add_labeled_combobox(form, "حفل الزفاف في هذا النظام", self.settings_wedding_policy_var, WEDDING_POLICY_OPTIONS, 4, 0, colspan=2)
-        self._add_labeled_entry(form, "رابط استقبال البلاغات", self.settings_support_url_var, 5, 0, colspan=2)
         ttk.Label(
             form,
             text="اختيار نظام المحاسبة يغيّر الحقول والحسابات: الطرف الواحد، المناصفة 50/50، أو تحديد الطرف المسؤول لكل بند.",
@@ -3391,7 +3392,7 @@ class ApartmentCostsApp:
             justify="right",
             style="HeaderSub.TLabel",
             wraplength=620,
-        ).grid(row=6, column=0, columnspan=2, sticky="ew", padx=5, pady=(0, 8))
+        ).grid(row=5, column=0, columnspan=2, sticky="ew", padx=5, pady=(0, 8))
 
         def sync_settings_split(*_):
             mode, np1, np2 = normalize_split(self.settings_split_mode_var.get(), self.settings_party1_percent_var.get(), self.settings_party2_percent_var.get())
@@ -3422,7 +3423,7 @@ class ApartmentCostsApp:
         self._action_button(actions, "حذف الجهة", self.delete_payment_target, kind="danger", width=112).pack(side="right", padx=4)
         self._action_button(actions, "إدارة الأماكن", self.open_rooms_window, kind="secondary", width=124).pack(side="right", padx=4)
         tk.Label(c, text=COPYRIGHT_NOTICE, bg=SURFACE, fg=TEXT_2, font=(FONT_FAMILY, 9), anchor="center", justify="center").pack(fill="x", pady=(12, 0))
-        self._fit_toplevel(w, 820, 700, 0.62, 0.84)
+        self._fit_toplevel(w, 900, 820, 0.68, 0.92)
 
     def open_settings_window(self):
         self._ensure_settings_window()
@@ -3434,12 +3435,12 @@ class ApartmentCostsApp:
         self.settings_currency_var.set(self.base_currency)
         self.settings_accounting_mode_var.set(self.accounting_mode)
         self.settings_wedding_policy_var.set(self.wedding_policy)
-        self.settings_support_url_var.set(load_support_web_app_url())
         self.update_settings_accounting_visibility()
         self.settings_split_mode_var.set(self.split_mode)
         self.settings_party1_percent_var.set(f"{self.party1_percent:.0f}")
         self.settings_party2_percent_var.set(f"{self.party2_percent:.0f}")
         self.refresh_payment_target_widgets()
+        self._fit_toplevel(self.settings_window, 900, 820, 0.68, 0.92)
         self._reveal_window(self.settings_window)
 
     def update_settings_accounting_visibility(self):
@@ -3480,7 +3481,6 @@ class ApartmentCostsApp:
         save_base_currency(self.base_currency)
         save_split_settings(self.split_mode, self.party1_percent, self.party2_percent)
         save_accounting_settings(self.accounting_mode, self.wedding_policy)
-        save_support_web_app_url(self.settings_support_url_var.get())
         self.conn.execute("UPDATE records SET payer=? WHERE payer=?", (self.user_name, old_user))
         self.conn.execute("UPDATE records SET payer=? WHERE payer=?", (self.other_party_name, old_other))
         self.conn.commit()

@@ -9,6 +9,9 @@ app_icon = project_root / "assets" / "app_icon.ico"
 datas = [
     (str(project_root / "assets"), "assets"),
 ]
+support_endpoint = project_root / "support_endpoint.txt"
+if support_endpoint.exists():
+    datas.append((str(support_endpoint), "."))
 
 hiddenimports = [
     "PIL._tkinter_finder",
