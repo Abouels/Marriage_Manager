@@ -102,6 +102,7 @@ WEDDING_PARTY1 = "حفل الزفاف على الطرف الأول"
 WEDDING_PARTY2 = "حفل الزفاف على الطرف الثاني"
 WEDDING_POLICY_OPTIONS = [WEDDING_EQUAL, WEDDING_PARTY1, WEDDING_PARTY2]
 SUPPORT_MESSAGE_TYPES = ["مشكلة تقنية", "طلب ميزة", "اقتراح تحسين", "ملاحظة عامة"]
+DEFAULT_SUPPORT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbySIOKYlbhOYq0Nw8krRoP__lLIuFlkLSLPgMQk2zMk8al35uYTb4dHs-sy2l2f9sp0/exec"
 THUMB_SIZE = (280, 220)
 # Theme constants
 BG_APP = "#F3EEE3"
@@ -993,7 +994,7 @@ def save_project_name(project_name):
 
 def load_support_web_app_url():
     data = load_config()
-    return str(data.get("support_web_app_url") or "").strip()
+    return str(data.get("support_web_app_url") or DEFAULT_SUPPORT_WEB_APP_URL).strip()
 
 
 def save_support_web_app_url(url):
