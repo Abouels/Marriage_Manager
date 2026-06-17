@@ -3258,7 +3258,10 @@ class ApartmentCostsApp:
                 pass
 
     def _support_payload(self):
-        details = self.support_details_text.get("1.0", "end-1c") if isinstance(getattr(self.support_details_text, "child", None), tk.Text) else self.support_details_text.get()
+        if isinstance(self.support_details_text, tk.Text):
+            details = self.support_details_text.get("1.0", "end-1c")
+        else:
+            details = self.support_details_text.get()
         return {
             "name": self.support_name_var.get().strip(),
             "email": self.support_email_var.get().strip(),
