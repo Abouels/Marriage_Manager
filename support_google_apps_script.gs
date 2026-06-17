@@ -1,5 +1,6 @@
 const SUPPORT_RECIPIENT_EMAIL = "mm.sys.support@gmail.com";
 const SHEET_NAME = "Support Requests";
+const SPREADSHEET_NAME = "Marriage Manager Support";
 const TICKET_PREFIX = "MM";
 
 function doPost(e) {
@@ -72,7 +73,7 @@ function nextTicketId_() {
 }
 
 function getOrCreateSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getOrCreateSpreadsheet_();
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
@@ -94,6 +95,27 @@ function getOrCreateSheet_() {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+function getOrCreateSpreadsheet_() {
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active) {
+    return active;
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const savedId = props.getProperty("supportSpreadsheetId");
+  if (savedId) {
+    try {
+      return SpreadsheetApp.openById(savedId);
+    } catch (err) {
+      props.deleteProperty("supportSpreadsheetId");
+    }
+  }
+
+  const ss = SpreadsheetApp.create(SPREADSHEET_NAME);
+  props.setProperty("supportSpreadsheetId", ss.getId());
+  return ss;
 }
 
 function buildOwnerEmail_(ticketId, payload, createdAt) {
