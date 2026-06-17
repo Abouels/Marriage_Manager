@@ -1,10 +1,10 @@
 # إعداد نظام البلاغات
 
-## 1. إنشاء Google Sheet
+## 1. إنشاء Google Sheet أو Apps Script
 
 1. افتح حساب الدعم: `mm.sys.support@gmail.com`.
-2. أنشئ Google Sheet جديد باسم مناسب مثل `Marriage Manager Support`.
-3. من القائمة اختر `Extensions` ثم `Apps Script`.
+2. أنشئ Google Sheet جديد باسم مناسب مثل `Marriage Manager Support`، ثم من القائمة اختر `Extensions` ثم `Apps Script`.
+3. لو فتحت Apps Script مباشرة من `script.google.com` بدون Google Sheet، سيعمل السكربت أيضًا وينشئ الشيت تلقائيًا عند أول بلاغ.
 4. انسخ محتوى ملف `support_google_apps_script.gs` داخل محرر Apps Script.
 5. لو عايز البلاغات توصل لإيميل مختلف، غير قيمة:
 
