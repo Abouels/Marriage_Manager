@@ -2,11 +2,19 @@ const SUPPORT_RECIPIENT_EMAIL = "your-support-email@example.com";
 const SHEET_NAME = "Support Requests";
 const SPREADSHEET_NAME = "Marriage Manager Support";
 const TICKET_PREFIX = "MM";
+const SUPPORT_MESSAGE_TYPES = ["مشكلة تقنية", "طلب ميزة", "اقتراح تحسين", "ملاحظة عامة"];
+const MAX_LENGTHS = {
+  name: 120,
+  email: 254,
+  subject: 160,
+  details: 4000,
+};
 
 function doPost(e) {
   try {
-    const payload = JSON.parse((e && e.postData && e.postData.contents) || "{}");
+    const payload = normalizePayload_(JSON.parse((e && e.postData && e.postData.contents) || "{}"));
     validatePayload_(payload);
+    validateRecipient_();
 
     const ticketId = nextTicketId_();
     const createdAt = new Date();
@@ -15,15 +23,15 @@ function doPost(e) {
     sheet.appendRow([
       ticketId,
       createdAt,
-      payload.type,
-      payload.subject,
-      payload.name,
-      payload.email,
-      payload.details,
-      payload.appName || "",
-      payload.appVersion || "",
-      payload.projectName || "",
-      payload.sentAt || "",
+      safeCell_(payload.type),
+      safeCell_(payload.subject),
+      safeCell_(payload.name),
+      safeCell_(payload.email),
+      safeCell_(payload.details),
+      safeCell_(payload.appName),
+      safeCell_(payload.appVersion),
+      safeCell_(payload.projectName),
+      safeCell_(payload.sentAt),
     ]);
 
     MailApp.sendEmail({
@@ -47,15 +55,46 @@ function doPost(e) {
   }
 }
 
+function normalizePayload_(payload) {
+  return {
+    name: String(payload.name || "").trim(),
+    email: String(payload.email || "").trim(),
+    type: String(payload.type || "").trim(),
+    subject: String(payload.subject || "").trim(),
+    details: String(payload.details || "").trim(),
+    appName: String(payload.appName || "").trim(),
+    appVersion: String(payload.appVersion || "").trim(),
+    projectName: String(payload.projectName || "").trim(),
+    sentAt: String(payload.sentAt || "").trim(),
+  };
+}
+
 function validatePayload_(payload) {
   const required = ["name", "email", "type", "subject", "details"];
   required.forEach((key) => {
-    if (!String(payload[key] || "").trim()) {
+    if (!payload[key]) {
       throw new Error(`Missing field: ${key}`);
     }
   });
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(payload.email || "").trim())) {
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payload.email)) {
     throw new Error("Invalid email address");
+  }
+  if (!SUPPORT_MESSAGE_TYPES.includes(payload.type)) {
+    throw new Error("Invalid message type");
+  }
+  Object.keys(MAX_LENGTHS).forEach((key) => {
+    if (payload[key].length > MAX_LENGTHS[key]) {
+      throw new Error(`Field is too long: ${key}`);
+    }
+  });
+}
+
+function validateRecipient_() {
+  if (
+    SUPPORT_RECIPIENT_EMAIL === "your-support-email@example.com" ||
+    !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(SUPPORT_RECIPIENT_EMAIL)
+  ) {
+    throw new Error("Support recipient email is not configured");
   }
 }
 
@@ -128,8 +167,8 @@ function buildOwnerEmail_(ticketId, payload, createdAt) {
       <p><b>العنوان:</b> ${escapeHtml_(payload.subject)}</p>
       <p><b>الاسم:</b> ${escapeHtml_(payload.name)}</p>
       <p><b>الإيميل:</b> ${escapeHtml_(payload.email)}</p>
-      <p><b>إصدار البرنامج:</b> ${escapeHtml_(payload.appVersion || "")}</p>
-      <p><b>اسم المشروع:</b> ${escapeHtml_(payload.projectName || "")}</p>
+      <p><b>إصدار البرنامج:</b> ${escapeHtml_(payload.appVersion)}</p>
+      <p><b>اسم المشروع:</b> ${escapeHtml_(payload.projectName)}</p>
       <hr>
       <p style="white-space:pre-wrap">${escapeHtml_(payload.details)}</p>
     </div>
@@ -146,6 +185,11 @@ function buildUserEmail_(ticketId, payload) {
       <p>شكرًا لمساعدتك في تحسين البرنامج.</p>
     </div>
   `;
+}
+
+function safeCell_(value) {
+  const text = String(value || "");
+  return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
 }
 
 function json_(data) {

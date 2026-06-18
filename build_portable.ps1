@@ -3,9 +3,10 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectRoot
 
-py -m pip install --upgrade pip
-py -m pip install -r requirements.txt
-py -m pip install pyinstaller
+$env:PYTHONUTF8 = "1"
+$env:PIP_PROGRESS_BAR = "off"
+py -m pip install --upgrade pip --progress-bar off
+py -m pip install -r requirements-build.txt --progress-bar off
 
 $SupportEndpointFile = Join-Path $ProjectRoot "support_endpoint.txt"
 $SupportEndpoint = "$env:MARRIAGE_MANAGER_SUPPORT_URL".Trim()
