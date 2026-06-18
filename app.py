@@ -2,6 +2,7 @@
 import json
 import sqlite3
 import shutil
+import stat
 import sys
 import threading
 import uuid
@@ -9,8 +10,9 @@ import webbrowser
 import zipfile
 import ctypes
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib import error as urlerror
+from urllib.parse import urlparse
 from urllib import request as urlrequest
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -104,6 +106,13 @@ WEDDING_POLICY_OPTIONS = [WEDDING_EQUAL, WEDDING_PARTY1, WEDDING_PARTY2]
 SUPPORT_MESSAGE_TYPES = ["مشكلة تقنية", "طلب ميزة", "اقتراح تحسين", "ملاحظة عامة"]
 SUPPORT_ENDPOINT_FILE = RESOURCE_DIR / "support_endpoint.txt"
 THUMB_SIZE = (280, 220)
+ALLOWED_ATTACHMENT_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp", ".pdf"}
+MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024
+MAX_BACKUP_EXTRACTED_BYTES = 2 * 1024 * 1024 * 1024
+MAX_SUPPORT_NAME_CHARS = 120
+MAX_SUPPORT_EMAIL_CHARS = 254
+MAX_SUPPORT_SUBJECT_CHARS = 160
+MAX_SUPPORT_DETAILS_CHARS = 4000
 # Theme constants
 BG_APP = "#F3EEE3"
 SURFACE = "#FFFDF7"
@@ -936,7 +945,16 @@ def load_config():
 
 def save_config(data):
     ensure_dirs()
-    CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp_path = CONFIG_PATH.with_name(f"{CONFIG_PATH.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        temp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temp_path, CONFIG_PATH)
+    finally:
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
 
 
 def load_room_options():
@@ -1003,6 +1021,103 @@ def load_support_web_app_url():
             return ""
     data = load_config()
     return str(data.get("support_web_app_url") or "").strip()
+
+
+def is_valid_support_web_app_url(url):
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url.strip())
+    except Exception:
+        return False
+    host = (parsed.hostname or "").lower()
+    return (
+        parsed.scheme == "https"
+        and host == "script.google.com"
+        and parsed.path.startswith("/macros/s/")
+        and parsed.path.endswith("/exec")
+    )
+
+
+def validate_support_text_lengths(payload):
+    limits = {
+        "name": MAX_SUPPORT_NAME_CHARS,
+        "email": MAX_SUPPORT_EMAIL_CHARS,
+        "subject": MAX_SUPPORT_SUBJECT_CHARS,
+        "details": MAX_SUPPORT_DETAILS_CHARS,
+    }
+    for key, limit in limits.items():
+        if len(str(payload.get(key) or "")) > limit:
+            return False, key, limit
+    return True, "", 0
+
+
+def is_supported_attachment(path):
+    return Path(path).suffix.lower() in ALLOWED_ATTACHMENT_EXTENSIONS
+
+
+def is_attachment_size_allowed(path):
+    try:
+        return Path(path).stat().st_size <= MAX_ATTACHMENT_BYTES
+    except OSError:
+        return False
+
+
+def iter_backup_source_files(output_path):
+    output_path = Path(output_path).resolve()
+    exports_dir = EXPORTS_DIR.resolve()
+    for path in DATA_DIR.rglob("*"):
+        if not path.is_file():
+            continue
+        resolved = path.resolve()
+        if resolved == output_path:
+            continue
+        try:
+            resolved.relative_to(exports_dir)
+            continue
+        except ValueError:
+            pass
+        yield path
+
+
+def _safe_backup_member_target(base_dir, member_name):
+    normalized = str(member_name or "").replace("\\", "/")
+    parsed = PurePosixPath(normalized)
+    parts = parsed.parts
+    if parsed.is_absolute() or not parts or parts[0] != "app_data":
+        raise ValueError("ملف النسخة الاحتياطية يحتوي على مسار غير صالح.")
+    if any(part in {"", ".", ".."} or ":" in part for part in parts):
+        raise ValueError("ملف النسخة الاحتياطية يحتوي على مسار غير صالح.")
+    target = (base_dir / Path(*parts)).resolve()
+    try:
+        target.relative_to(base_dir.resolve())
+    except ValueError as exc:
+        raise ValueError("ملف النسخة الاحتياطية يحتوي على مسار غير صالح.") from exc
+    return target
+
+
+def extract_backup_safely(zip_path, destination_dir):
+    destination_dir = Path(destination_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    total_size = 0
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        infos = zf.infolist()
+        if not infos:
+            raise ValueError("ملف النسخة الاحتياطية فارغ.")
+        for info in infos:
+            mode = info.external_attr >> 16
+            if stat.S_ISLNK(mode):
+                raise ValueError("ملف النسخة الاحتياطية يحتوي على رابط غير مسموح.")
+            total_size += int(info.file_size or 0)
+            if total_size > MAX_BACKUP_EXTRACTED_BYTES:
+                raise ValueError("حجم النسخة الاحتياطية بعد فك الضغط كبير جدًا.")
+            target = _safe_backup_member_target(destination_dir, info.filename)
+            if info.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info, "r") as source, target.open("wb") as dest:
+                shutil.copyfileobj(source, dest)
 
 
 def normalize_text_options(options, defaults):
@@ -1166,6 +1281,8 @@ def is_pdf(path: str):
 def copy_invoice_file(src: str, item_name: str):
     if not src:
         return "", ""
+    if not is_supported_attachment(src) or not is_attachment_size_allowed(src):
+        return "", ""
     ensure_dirs()
     ext = Path(src).suffix.lower()
     base_name = sanitize_filename(item_name)
@@ -1180,6 +1297,8 @@ def copy_invoice_file(src: str, item_name: str):
 
 def copy_loan_receipt_file(src: str, loan_name: str):
     if not src:
+        return "", ""
+    if not is_supported_attachment(src) or not is_attachment_size_allowed(src):
         return "", ""
     ensure_dirs()
     ext = Path(src).suffix.lower()
@@ -1251,6 +1370,7 @@ def connect_db():
     ensure_dirs()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS records (
@@ -1365,6 +1485,7 @@ def connect_db():
     loan_columns = {row[1] for row in conn.execute("PRAGMA table_info(loans)").fetchall()}
     if {"lender_name", "method", "borrowed_at"} & loan_columns:
         legacy_name = f"loans_legacy_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        conn.commit()
         conn.execute("PRAGMA foreign_keys=OFF")
         conn.execute(f"ALTER TABLE loans RENAME TO {legacy_name}")
         conn.execute(
@@ -1421,6 +1542,14 @@ def connect_db():
           )
         """
     )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC, id DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_records_type_room ON records(main_type, room)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_record_invoices_record_id ON record_invoices(record_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_received_at ON receipts(received_at DESC, id DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_advances_advance_at ON advances(advance_at DESC, id DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_advances_direction ON advances(direction)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_loans_loan_at ON loans(loan_at DESC, id DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_loan_payments_loan_id ON loan_payments(loan_id, paid_at DESC, id DESC)")
     conn.commit()
     return conn
 
@@ -3034,18 +3163,30 @@ class ApartmentCostsApp:
         paths = filedialog.askopenfilenames(
             title="اختر الفاتورة أو المرفق",
             filetypes=[
-                ("الصور وPDF", "*.png *.jpg *.jpeg *.bmp *.webp *.pdf"),
-                ("الصور", "*.png *.jpg *.jpeg *.bmp *.webp"),
+                ("الصور وPDF", "*.png *.jpg *.jpeg *.bmp *.gif *.webp *.pdf"),
+                ("الصور", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"),
                 ("PDF", "*.pdf"),
-                ("كل الملفات", "*.*"),
             ],
         )
         if paths:
             self._attach_invoice_files(paths)
 
     def _attach_invoice_files(self, paths):
-        clean_paths = [str(Path(path)) for path in paths if path and Path(path).exists()]
+        clean_paths = []
+        rejected = []
+        for path in paths:
+            if not path or not Path(path).exists():
+                continue
+            if not is_supported_attachment(path):
+                rejected.append(Path(path).name)
+                continue
+            if not is_attachment_size_allowed(path):
+                rejected.append(f"{Path(path).name} (أكبر من 100MB)")
+                continue
+            clean_paths.append(str(Path(path)))
         if not clean_paths:
+            if rejected:
+                messagebox.showwarning("مرفق غير مدعوم", "المرفقات المسموحة: صور أو PDF فقط.")
             return
         existing = {inv["path"] for inv in self.selected_invoice_sources}
         for path in clean_paths:
@@ -3054,7 +3195,11 @@ class ApartmentCostsApp:
                 existing.add(path)
         self.invoice_removed_in_edit = False
         self.invoice_name_var.set(format_invoice_names(self.selected_invoice_sources))
-        self.status_var.set("تم اختيار مرفق جديد")
+        if rejected:
+            self.status_var.set("تم اختيار المرفقات المدعومة فقط")
+            messagebox.showwarning("مرفقات تم تجاهلها", "تم تجاهل أي ملفات ليست صورًا أو PDF أو أكبر من 100MB.")
+        else:
+            self.status_var.set("تم اختيار مرفق جديد")
 
     def _register_invoice_drop_target(self, *widgets):
         if DND_FILES is None:
@@ -3285,6 +3430,9 @@ class ApartmentCostsApp:
         if not url:
             messagebox.showwarning("الخدمة غير مفعلة", "خدمة استقبال البلاغات غير مفعلة في هذه النسخة.")
             return
+        if not is_valid_support_web_app_url(url):
+            messagebox.showwarning("إعداد غير آمن", "رابط استقبال البلاغات غير صالح أو غير آمن.")
+            return
         payload = self._support_payload()
         if not payload["name"]:
             messagebox.showerror("بيانات ناقصة", "من فضلك أدخل الاسم.")
@@ -3300,6 +3448,14 @@ class ApartmentCostsApp:
             return
         if not payload["details"]:
             messagebox.showerror("بيانات ناقصة", "من فضلك اكتب تفاصيل الرسالة.")
+            return
+        length_ok, field_name, limit = validate_support_text_lengths(payload)
+        if not length_ok:
+            field_labels = {"name": "الاسم", "email": "البريد الإلكتروني", "subject": "العنوان", "details": "التفاصيل"}
+            messagebox.showerror(
+                "بيانات طويلة",
+                f"حقل {field_labels.get(field_name, field_name)} أطول من الحد المسموح ({limit} حرف).",
+            )
             return
 
         self.support_status_label.configure(text="جاري إرسال الرسالة...")
@@ -3544,9 +3700,8 @@ class ApartmentCostsApp:
         try:
             output_path = Path(output).resolve()
             with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
-                for path in DATA_DIR.rglob("*"):
-                    if path.is_file() and path.resolve() != output_path:
-                        zf.write(path, Path("app_data") / path.relative_to(DATA_DIR))
+                for path in iter_backup_source_files(output_path):
+                    zf.write(path, Path("app_data") / path.relative_to(DATA_DIR))
             self.status_var.set(f"تم تصدير النسخة الاحتياطية: {Path(output).name}")
             messagebox.showinfo("تم", f"تم تصدير النسخة الاحتياطية بنجاح:\n{output}")
         except Exception as e:
@@ -3566,20 +3721,23 @@ class ApartmentCostsApp:
             return
         temp_dir = DATA_DIR.parent / f"_restore_temp_{uuid.uuid4().hex}"
         old_backup = DATA_DIR.parent / f"app_data_before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        moved_current_data = False
+        conn_closed = False
         try:
             temp_dir.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(path, "r") as zf:
-                zf.extractall(temp_dir)
+            extract_backup_safely(path, temp_dir)
             extracted_data = temp_dir / "app_data"
             if not extracted_data.exists():
                 messagebox.showerror("خطأ", "ملف النسخة الاحتياطية غير صالح: لا يحتوي على مجلد app_data.")
                 return
             try:
                 self.conn.close()
+                conn_closed = True
             except Exception:
                 pass
             if DATA_DIR.exists():
                 shutil.move(str(DATA_DIR), str(old_backup))
+                moved_current_data = True
             shutil.move(str(extracted_data), str(DATA_DIR))
             self.project_name = load_project_name()
             self.user_name, self.other_party_name = load_party_names()
@@ -3605,6 +3763,16 @@ class ApartmentCostsApp:
             self.status_var.set("تم استيراد النسخة الاحتياطية")
             messagebox.showinfo("تم", f"تم استيراد النسخة الاحتياطية بنجاح.\nتم حفظ البيانات السابقة في:\n{old_backup}")
         except Exception as e:
+            if moved_current_data and not DATA_DIR.exists() and old_backup.exists():
+                try:
+                    shutil.move(str(old_backup), str(DATA_DIR))
+                except Exception:
+                    pass
+            if conn_closed:
+                try:
+                    self.conn = connect_db()
+                except Exception:
+                    pass
             messagebox.showerror("خطأ", f"تعذر استيراد النسخة الاحتياطية:\n{e}")
         finally:
             if temp_dir.exists():
@@ -5100,13 +5268,18 @@ class ApartmentCostsApp:
         path = filedialog.askopenfilename(
             title="اختر صورة أو ملف إيصال السداد",
             filetypes=[
-                ("الصور وPDF", "*.png *.jpg *.jpeg *.bmp *.webp *.pdf"),
-                ("الصور", "*.png *.jpg *.jpeg *.bmp *.webp"),
+                ("الصور وPDF", "*.png *.jpg *.jpeg *.bmp *.gif *.webp *.pdf"),
+                ("الصور", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"),
                 ("PDF", "*.pdf"),
-                ("كل الملفات", "*.*"),
             ],
         )
         if path:
+            if not is_supported_attachment(path):
+                messagebox.showwarning("مرفق غير مدعوم", "المرفقات المسموحة: صور أو PDF فقط.")
+                return
+            if not is_attachment_size_allowed(path):
+                messagebox.showwarning("مرفق كبير", "حجم المرفق يجب ألا يزيد عن 100MB.")
+                return
             self.selected_loan_payment_receipt_source = path
             self.loan_payment_receipt_var.set(Path(path).name)
 
