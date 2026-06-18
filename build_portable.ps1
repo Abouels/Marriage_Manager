@@ -12,6 +12,8 @@ $SupportEndpointFile = Join-Path $ProjectRoot "support_endpoint.txt"
 $SupportEndpoint = "$env:MARRIAGE_MANAGER_SUPPORT_URL".Trim()
 if ($SupportEndpoint) {
     Set-Content -Path $SupportEndpointFile -Value $SupportEndpoint -Encoding UTF8
+} elseif (Test-Path $SupportEndpointFile) {
+    Remove-Item -LiteralPath $SupportEndpointFile -Force
 }
 
 $BuildDir = Join-Path $ProjectRoot "build"
