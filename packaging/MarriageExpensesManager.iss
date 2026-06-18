@@ -12,6 +12,9 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\MarriageExpensesManager
 DefaultGroupName={#MyAppName}
+UsePreviousAppDir=yes
+DisableDirPage=auto
+DisableProgramGroupPage=auto
 OutputDir=..\dist\installer
 OutputBaseFilename=MarriageExpensesManager_Setup_{#MyAppVersion}
 SetupIconFile=..\assets\app_icon.ico
@@ -22,6 +25,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
+SetupMutex=MarriageExpensesManagerSetupMutex
 
 [Files]
 Source: "..\dist\MarriageExpensesManager\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Excludes: "portable.flag,app_data,app_data\*"
