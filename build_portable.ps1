@@ -7,6 +7,12 @@ py -m pip install --upgrade pip
 py -m pip install -r requirements.txt
 py -m pip install pyinstaller
 
+$SupportEndpointFile = Join-Path $ProjectRoot "support_endpoint.txt"
+$SupportEndpoint = "$env:MARRIAGE_MANAGER_SUPPORT_URL".Trim()
+if ($SupportEndpoint) {
+    Set-Content -Path $SupportEndpointFile -Value $SupportEndpoint -Encoding UTF8
+}
+
 $BuildDir = Join-Path $ProjectRoot "build"
 $DistDir = Join-Path $ProjectRoot "dist"
 foreach ($PathToClean in @($BuildDir, $DistDir)) {
