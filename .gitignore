@@ -1,5 +1,10 @@
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 app_data/
 app_data_backup_*/
@@ -10,5 +15,15 @@ build/
 dist/
 *.log
 *.zip
+*.tmp
+
+.venv/
+venv/
+env/
+
+.DS_Store
+Thumbs.db
+Desktop.ini
 
 support_endpoint.txt
+assets/app_icon.icns
