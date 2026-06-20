@@ -1,5 +1,6 @@
 import os
 import shutil
+import sqlite3
 import tempfile
 import unittest
 import zipfile
@@ -107,6 +108,45 @@ class CoreSecurityTests(unittest.TestCase):
             self.assertIn("idx_loan_payments_loan_id", indexes)
         finally:
             conn.close()
+
+    def test_furniture_pdf_report_includes_accounting_fields(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            """
+            CREATE TABLE records (
+                id INTEGER PRIMARY KEY,
+                main_type TEXT NOT NULL,
+                item_name TEXT NOT NULL,
+                room TEXT,
+                quantity REAL,
+                unit_price REAL,
+                total REAL,
+                payer TEXT,
+                shared_split INTEGER,
+                notes TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO records
+            (main_type, item_name, room, quantity, unit_price, total, payer, shared_split, notes, updated_at)
+            VALUES ('فرش', 'كنبة', 'الريسبشن', 1, 1000, 1000, 'أحمد', 1, '', '2026-06-20 12:00:00')
+            """
+        )
+
+        manager = app.ApartmentCostsApp.__new__(app.ApartmentCostsApp)
+        manager.conn = conn
+        manager.user_name = "أحمد"
+        manager.other_party_name = "سارة"
+        manager.accounting_mode = app.ACCOUNTING_EQUAL
+
+        spec = manager._build_report_spec("furniture")
+
+        self.assertEqual(spec["title"], "تقرير الفرش")
+        self.assertEqual(spec["rows"][0][7], "مشترك 50/50")
 
 
 if __name__ == "__main__":
