@@ -1814,12 +1814,11 @@ class ApartmentCostsApp:
                 req_width = inner.winfo_reqwidth() + 34
                 req_height = inner.winfo_reqheight() + 38
                 card.configure(width=req_width, height=req_height)
-                card.canvas.configure(width=req_width, height=req_height)
-                card.refresh_size()
+                card.update_idletasks()
                 viewport.update_idletasks()
                 refresh_scrollregion()
             except Exception:
-                pass
+                refresh_scrollregion()
 
         window._scrollable_popup_refresh = refresh_card_size
         inner.bind("<Configure>", lambda _event: outer.after_idle(refresh_card_size), add="+")
