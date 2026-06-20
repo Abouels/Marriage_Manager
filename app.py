@@ -37,7 +37,7 @@ except Exception:
 
 APP_TITLE = "مدير مصاريف الزواج"
 APP_SLUG = "MarriageExpensesManager"
-APP_VERSION = "1.0.0"
+APP_VERSION_FALLBACK = "1.0.0"
 APP_USER_MODEL_ID = "Abouels.MarriageExpensesManager"
 SOURCE_DIR = Path(__file__).resolve().parent
 IS_FROZEN = getattr(sys, "frozen", False)
@@ -47,6 +47,24 @@ ASSETS_DIR = RESOURCE_DIR / "assets"
 ICONS_DIR = ASSETS_DIR / "icons"
 APP_ICON_PNG = ASSETS_DIR / "app_icon.png"
 APP_ICON_ICO = ASSETS_DIR / "app_icon.ico"
+VERSION_FILE = RESOURCE_DIR / "version.txt"
+
+
+def load_app_version():
+    env_version = os.environ.get("MARRIAGE_MANAGER_VERSION", "").strip()
+    if env_version:
+        return env_version
+    if VERSION_FILE.exists():
+        try:
+            version = VERSION_FILE.read_text(encoding="utf-8").strip()
+            if version:
+                return version
+        except Exception:
+            pass
+    return APP_VERSION_FALLBACK
+
+
+APP_VERSION = load_app_version()
 
 
 def get_data_dir():
@@ -1386,6 +1404,7 @@ def connect_db():
             quantity REAL DEFAULT 1,
             unit_price REAL DEFAULT 0,
             total REAL DEFAULT 0,
+            paid_at TEXT,
             notes TEXT,
             invoice_path TEXT,
             invoice_original_name TEXT,
@@ -1530,6 +1549,8 @@ def connect_db():
     if "shared_split" not in columns:
         conn.execute("ALTER TABLE records ADD COLUMN shared_split INTEGER DEFAULT 1")
         conn.execute("UPDATE records SET shared_split=1 WHERE shared_split IS NULL")
+    if "paid_at" not in columns:
+        conn.execute("ALTER TABLE records ADD COLUMN paid_at TEXT")
     conn.execute("UPDATE records SET main_type=? WHERE main_type=?", (WEDDING_TYPE, LEGACY_WEDDING_TYPE))
     conn.execute(
         """
@@ -1546,6 +1567,7 @@ def connect_db():
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_records_type_room ON records(main_type, room)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_records_paid_at ON records(paid_at DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_record_invoices_record_id ON record_invoices(record_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_received_at ON receipts(received_at DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_advances_advance_at ON advances(advance_at DESC, id DESC)")
@@ -2478,6 +2500,7 @@ class ApartmentCostsApp:
         self.quantity_var = tk.StringVar(value="1")
         self.unit_price_var = tk.StringVar(value="0")
         self.total_var = tk.StringVar(value="0.00")
+        self.record_payment_date_var = tk.StringVar()
         self.invoice_name_var = tk.StringVar(value="لا يوجد ملف مرفق")
         self.status_var = tk.StringVar(value="جاهز")
 
@@ -2691,6 +2714,7 @@ class ApartmentCostsApp:
         copyright_panel.pack(fill="x")
         tk.Frame(copyright_panel, bg="#D4C3A3", height=1).pack(fill="x", pady=(0, 6))
         tk.Label(copyright_panel, text="</>", bg=SIDEBAR_BG, fg=PRIMARY, font=(FONT_FAMILY, 10, "bold"), anchor="center", justify="center").pack(fill="x")
+        tk.Label(copyright_panel, text=f"الإصدار {APP_VERSION}", bg=SIDEBAR_BG, fg=TEXT_2, font=(FONT_FAMILY, 7, "bold"), anchor="center", justify="center", wraplength=214).pack(fill="x", pady=(0, 2))
         tk.Label(copyright_panel, text=COPYRIGHT_NOTICE, bg=SIDEBAR_BG, fg=TEXT, font=(FONT_FAMILY, 7, "bold"), anchor="center", justify="center", wraplength=214).pack(fill="x", pady=(1, 0))
         tk.Label(copyright_panel, text=OWNER_EMAIL, bg=SIDEBAR_BG, fg=TEXT_2, font=(FONT_FAMILY, 7), anchor="center", justify="center", wraplength=214).pack(fill="x", pady=(0, 0))
 
@@ -2876,6 +2900,7 @@ class ApartmentCostsApp:
         total_frame = add_clean_money_entry(fin_form, "الإجمالي", self.total_var, 0, 1, state="readonly")
         self.quantity_frame = add_clean_money_entry(fin_form, "الكمية", self.quantity_var, 1, 1)
         self.unit_price_frame = add_clean_money_entry(fin_form, "سعر الوحدة", self.unit_price_var, 1, 0)
+        self.record_payment_date_frame = add_clean_money_entry(fin_form, "تاريخ الدفع (اختياري)", self.record_payment_date_var, 2, 0, colspan=2)
 
         invoice_label = tk.Label(
             financial_card,
@@ -3983,6 +4008,13 @@ class ApartmentCostsApp:
         if unit is None or unit < 0:
             messagebox.showerror("خطأ", "سعر الوحدة غير صحيح.")
             return False
+        paid_at = self.record_payment_date_var.get().strip()
+        if paid_at:
+            try:
+                datetime.strptime(paid_at, "%Y-%m-%d")
+            except ValueError:
+                messagebox.showerror("خطأ", "صيغة تاريخ الدفع غير صحيحة. استخدم YYYY-MM-DD أو اتركه فارغًا.")
+                return False
         return True
 
     def delete_invoice_file_if_orphan(self, path, excluding_record_id=None):
@@ -4055,6 +4087,7 @@ class ApartmentCostsApp:
         notes = self._get_text_value(self.notes_text)
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         item_name = self.item_name_var.get().strip()
+        paid_at = self.record_payment_date_var.get().strip() or None
 
         invoices = self._prepare_selected_invoices(item_name)
         first_invoice = invoices[0] if invoices else None
@@ -4079,8 +4112,8 @@ class ApartmentCostsApp:
             self.conn.execute(
                 """
                 INSERT INTO records
-                (main_type, finish_type, payer, shared_split, item_name, room, quantity, unit_price, total, notes, invoice_path, invoice_original_name, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (main_type, finish_type, payer, shared_split, item_name, room, quantity, unit_price, total, paid_at, notes, invoice_path, invoice_original_name, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     self.main_type_var.get(),
@@ -4092,6 +4125,7 @@ class ApartmentCostsApp:
                     qty,
                     unit,
                     total,
+                    paid_at,
                     notes,
                     first_invoice["path"] if first_invoice else None,
                     first_invoice.get("original_name") if first_invoice else None,
@@ -4118,7 +4152,7 @@ class ApartmentCostsApp:
             self.conn.execute(
                 """
                 UPDATE records SET
-                main_type=?, finish_type=?, payer=?, shared_split=?, item_name=?, room=?, quantity=?, unit_price=?, total=?, notes=?,
+                main_type=?, finish_type=?, payer=?, shared_split=?, item_name=?, room=?, quantity=?, unit_price=?, total=?, paid_at=?, notes=?,
                 invoice_path=?, invoice_original_name=?, updated_at=?
                 WHERE id=?
                 """,
@@ -4132,6 +4166,7 @@ class ApartmentCostsApp:
                     qty,
                     unit,
                     total,
+                    paid_at,
                     notes,
                     first_invoice["path"] if first_invoice else None,
                     first_invoice.get("original_name") if first_invoice else None,
@@ -4164,6 +4199,7 @@ class ApartmentCostsApp:
         self.quantity_var.set("1")
         self.unit_price_var.set("0")
         self.total_var.set("0.00")
+        self.record_payment_date_var.set("")
         self.shared_only_var.set(False)
         self._clear_text_value(self.notes_text)
         self.selected_invoice_sources = []
@@ -4216,7 +4252,7 @@ class ApartmentCostsApp:
         results_frame.columnconfigure(0, weight=1)
         results_frame.rowconfigure(0, weight=1)
 
-        columns = ("id", "type", "subtype", "payer", "item", "room", "total", "date")
+        columns = ("id", "type", "subtype", "payer", "item", "room", "total", "paid_at", "date")
         self.results_tree = ttk.Treeview(results_frame, columns=columns, show="headings", selectmode="browse")
         headings = {
             "id": "م",
@@ -4226,9 +4262,10 @@ class ApartmentCostsApp:
             "item": "البند",
             "room": "المكان",
             "total": "الإجمالي",
+            "paid_at": "تاريخ الدفع",
             "date": "آخر تحديث",
         }
-        widths = {"id": 60, "type": 90, "subtype": 110, "payer": 100, "item": 260, "room": 140, "total": 110, "date": 150}
+        widths = {"id": 60, "type": 90, "subtype": 110, "payer": 100, "item": 240, "room": 130, "total": 110, "paid_at": 110, "date": 145}
         for col in columns:
             self.results_tree.heading(col, text=headings[col], anchor="center")
             self.results_tree.column(col, width=widths[col], anchor="center")
@@ -4286,6 +4323,7 @@ class ApartmentCostsApp:
                     row["item_name"],
                     row["room"],
                     f"{row['total']:.2f}",
+                    row["paid_at"] or "-",
                     row["updated_at"][:16],
                 ),
             )
@@ -4321,6 +4359,7 @@ class ApartmentCostsApp:
             f"الكمية: {row['quantity']}",
             f"سعر الوحدة: {row['unit_price']:.2f}",
             f"الإجمالي: {row['total']:.2f}",
+            f"تاريخ الدفع: {row['paid_at'] or '-'}",
             f"آخر تحديث: {row['updated_at']}",
             f"ملاحظات: {row['notes'] or '-'}",
         ]
@@ -4426,6 +4465,7 @@ class ApartmentCostsApp:
         self.quantity_var.set(str(row["quantity"]))
         self.unit_price_var.set(str(row["unit_price"]))
         self.total_var.set(f"{row['total']:.2f}")
+        self.record_payment_date_var.set((row["paid_at"] or "")[:10] if "paid_at" in row.keys() else "")
         self._set_text_value(self.notes_text, row["notes"] or "")
         self.selected_invoice_sources = self.get_record_invoices(record_id)
         if not self.selected_invoice_sources and row["invoice_path"]:
@@ -5497,10 +5537,10 @@ class ApartmentCostsApp:
         wedding_rows = [r for r in rows if r["main_type"] == WEDDING_TYPE]
         other_rows = [r for r in rows if r["main_type"] == OTHER_EXPENSES_TYPE]
 
-        headers_furn = ["م", "البند", "الدافع", "نوع المشاركة", "المكان", "الكمية", "سعر الوحدة", "الإجمالي", f"نصيب {self.user_name}", "الملاحظات", "اسم الفاتورة", "مسار الفاتورة", "تاريخ الإنشاء", "آخر تحديث"]
-        headers_finish = ["م", "تصنيف التشطيب", "البند", "المكان", "الكمية", "سعر الوحدة", "الإجمالي", "الملاحظات", "اسم الفاتورة", "مسار الفاتورة", "تاريخ الإنشاء", "آخر تحديث"]
-        headers_wedding = ["م", "البند", "المكان", "الكمية", "سعر الوحدة", "الإجمالي", "الملاحظات", "اسم الفاتورة", "مسار الفاتورة", "تاريخ الإنشاء", "آخر تحديث"]
-        headers_other = ["م", "البند", "الكمية", "سعر الوحدة", "الإجمالي", "الملاحظات", "اسم الفاتورة", "مسار الفاتورة", "تاريخ الإنشاء", "آخر تحديث"]
+        headers_furn = ["م", "البند", "الدافع", "نوع المشاركة", "المكان", "الكمية", "سعر الوحدة", "الإجمالي", f"نصيب {self.user_name}", "تاريخ الدفع", "الملاحظات", "اسم الفاتورة", "مسار الفاتورة", "تاريخ الإنشاء", "آخر تحديث"]
+        headers_finish = ["م", "تصنيف التشطيب", "البند", "المكان", "الكمية", "سعر الوحدة", "الإجمالي", "تاريخ الدفع", "الملاحظات", "اسم الفاتورة", "مسار الفاتورة", "تاريخ الإنشاء", "آخر تحديث"]
+        headers_wedding = ["م", "البند", "المكان", "الكمية", "سعر الوحدة", "الإجمالي", "تاريخ الدفع", "الملاحظات", "اسم الفاتورة", "مسار الفاتورة", "تاريخ الإنشاء", "آخر تحديث"]
+        headers_other = ["م", "البند", "الكمية", "سعر الوحدة", "الإجمالي", "تاريخ الدفع", "الملاحظات", "اسم الفاتورة", "مسار الفاتورة", "تاريخ الإنشاء", "آخر تحديث"]
 
         self._fill_sheet(ws1, headers_furn, furn_rows, mode="furn")
         self._fill_sheet(ws2, headers_finish, finish_rows, mode="finish")
@@ -5536,15 +5576,16 @@ class ApartmentCostsApp:
                 invoices = [{"path": row["invoice_path"], "original_name": row["invoice_original_name"]}]
             invoice_names = " | ".join(inv.get("original_name") or Path(inv["path"]).name for inv in invoices)
             invoice_paths = " | ".join(inv["path"] for inv in invoices)
+            paid_at = row["paid_at"] or "-"
             if mode == "finish":
-                values = [row["id"], row["finish_type"] or "-", row["item_name"], row["room"], row["quantity"], row["unit_price"], row["total"], row["notes"], invoice_names, invoice_paths, row["created_at"], row["updated_at"]]
+                values = [row["id"], row["finish_type"] or "-", row["item_name"], row["room"], row["quantity"], row["unit_price"], row["total"], paid_at, row["notes"], invoice_names, invoice_paths, row["created_at"], row["updated_at"]]
             elif mode == "wedding":
-                values = [row["id"], row["item_name"], row["room"], row["quantity"], row["unit_price"], row["total"], row["notes"], invoice_names, invoice_paths, row["created_at"], row["updated_at"]]
+                values = [row["id"], row["item_name"], row["room"], row["quantity"], row["unit_price"], row["total"], paid_at, row["notes"], invoice_names, invoice_paths, row["created_at"], row["updated_at"]]
             elif mode == "other":
-                values = [row["id"], row["item_name"], row["quantity"], row["unit_price"], row["total"], row["notes"], invoice_names, invoice_paths, row["created_at"], row["updated_at"]]
+                values = [row["id"], row["item_name"], row["quantity"], row["unit_price"], row["total"], paid_at, row["notes"], invoice_names, invoice_paths, row["created_at"], row["updated_at"]]
             else:
                 party1_value = self.record_party1_share(row)
-                values = [row["id"], row["item_name"], row["payer"] or self.user_name, self.record_accounting_label(row), row["room"], row["quantity"], row["unit_price"], row["total"], party1_value, row["notes"], invoice_names, invoice_paths, row["created_at"], row["updated_at"]]
+                values = [row["id"], row["item_name"], row["payer"] or self.user_name, self.record_accounting_label(row), row["room"], row["quantity"], row["unit_price"], row["total"], party1_value, paid_at, row["notes"], invoice_names, invoice_paths, row["created_at"], row["updated_at"]]
             ws.append(values)
         self._beautify_ws(ws)
         if ws.max_row >= 2:
@@ -5764,7 +5805,7 @@ class ApartmentCostsApp:
         if report_key == "furniture":
             rows = self.conn.execute(
                 """
-                SELECT id, main_type, item_name, room, quantity, unit_price, total, payer, shared_split, notes, updated_at
+                SELECT id, main_type, item_name, room, quantity, unit_price, total, paid_at, payer, shared_split, notes, updated_at
                 FROM records
                 WHERE main_type='فرش'
                 ORDER BY updated_at DESC, id DESC
@@ -5779,6 +5820,7 @@ class ApartmentCostsApp:
                     self._fmt_num(row["quantity"]),
                     self._fmt_money(row["unit_price"]),
                     self._fmt_money(row["total"]),
+                    row["paid_at"] or "-",
                     row["payer"] or self.user_name,
                     self.record_accounting_label(row),
                 ])
@@ -5786,8 +5828,8 @@ class ApartmentCostsApp:
             return {
                 "title": "تقرير الفرش",
                 "columns": [
-                    ("م", 30), ("البند", 178), ("المكان", 82), ("العدد", 50),
-                    ("سعر الوحدة", 78), ("الإجمالي", 82), ("الدافع", 74), ("المشاركة", 82),
+                    ("م", 28), ("البند", 150), ("المكان", 72), ("العدد", 44),
+                    ("سعر الوحدة", 70), ("الإجمالي", 72), ("تاريخ الدفع", 78), ("الدافع", 66), ("المشاركة", 76),
                 ],
                 "rows": data,
                 "summary": [("إجمالي الفرش", self._fmt_money(total)), ("عدد البنود", str(len(rows)))],
@@ -5846,7 +5888,7 @@ class ApartmentCostsApp:
         if report_key == "finishing":
             rows = self.conn.execute(
                 """
-                SELECT id, finish_type, item_name, room, quantity, unit_price, total, notes, updated_at
+                SELECT id, finish_type, item_name, room, quantity, unit_price, total, paid_at, notes, updated_at
                 FROM records
                 WHERE main_type='تشطيب'
                 ORDER BY updated_at DESC, id DESC
@@ -5865,6 +5907,7 @@ class ApartmentCostsApp:
                     self._fmt_num(row["quantity"]),
                     self._fmt_money(row["unit_price"]),
                     self._fmt_money(row["total"]),
+                    row["paid_at"] or "-",
                     row["notes"] or "-",
                 ])
             total = sum(row["total"] for row in rows)
@@ -5873,8 +5916,8 @@ class ApartmentCostsApp:
             return {
                 "title": "تقرير التشطيبات",
                 "columns": [
-                    ("م", 30), ("التصنيف", 92), ("البند", 174), ("المكان", 76),
-                    ("العدد", 48), ("سعر الوحدة", 78), ("الإجمالي", 82), ("ملاحظات", 190),
+                    ("م", 28), ("التصنيف", 78), ("البند", 140), ("المكان", 68),
+                    ("العدد", 42), ("سعر الوحدة", 68), ("الإجمالي", 70), ("تاريخ الدفع", 76), ("ملاحظات", 150),
                 ],
                 "rows": data,
                 "summary": summary,

@@ -45,7 +45,8 @@ jobs:
         shell: pwsh
         env:
           MARRIAGE_MANAGER_SUPPORT_URL: ${{ secrets.MARRIAGE_MANAGER_SUPPORT_URL }}
-        run: .\build_portable.ps1
+          MARRIAGE_MANAGER_VERSION: ${{ steps.version.outputs.version }}
+        run: .\build_portable.ps1 -Version "${{ steps.version.outputs.version }}"
 
       - name: Build installer
         shell: pwsh
