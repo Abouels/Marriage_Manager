@@ -1771,6 +1771,72 @@ class ApartmentCostsApp:
             tk.Label(inner, text=title, bg=SURFACE, fg=PRIMARY, font=(FONT_FAMILY, 15, "bold"), anchor="e", justify="right").pack(fill="x", pady=(0, 12))
         return inner
 
+    def _scrollable_popup_card(self, window, title, padx=18, pady=18):
+        outer = tk.Frame(window, bg=BG_APP, padx=18, pady=16)
+        outer.pack(fill="both", expand=True)
+        canvas = tk.Canvas(outer, bg=BG_APP, highlightthickness=0, bd=0)
+        scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        viewport = tk.Frame(canvas, bg=BG_APP)
+        window_id = canvas.create_window((0, 0), window=viewport, anchor="nw")
+
+        def refresh_scrollregion(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def resize_viewport(event):
+            canvas.itemconfigure(window_id, width=max(1, event.width))
+            refresh_scrollregion()
+
+        def update_scrollbar(first, last):
+            scrollbar.set(first, last)
+            if float(first) <= 0.0 and float(last) >= 1.0:
+                if scrollbar.winfo_ismapped():
+                    scrollbar.pack_forget()
+            elif not scrollbar.winfo_ismapped():
+                scrollbar.pack(side="left", fill="y")
+
+        def on_mousewheel(event):
+            if canvas.yview() != (0.0, 1.0):
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.configure(yscrollcommand=update_scrollbar)
+        viewport.bind("<Configure>", refresh_scrollregion, add="+")
+        canvas.bind("<Configure>", resize_viewport, add="+")
+        window.bind("<MouseWheel>", on_mousewheel, add="+")
+        canvas.pack(side="right", fill="both", expand=True)
+
+        card, inner = self._make_luxury_card(viewport, padx=padx, pady=pady)
+        card.pack(fill="x", expand=True)
+
+        def refresh_card_size(_event=None):
+            try:
+                req_width = inner.winfo_reqwidth() + 34
+                req_height = inner.winfo_reqheight() + 38
+                card.configure(width=req_width, height=req_height)
+                card.canvas.configure(width=req_width, height=req_height)
+                card.refresh_size()
+                viewport.update_idletasks()
+                refresh_scrollregion()
+            except Exception:
+                pass
+
+        window._scrollable_popup_refresh = refresh_card_size
+        inner.bind("<Configure>", lambda _event: outer.after_idle(refresh_card_size), add="+")
+        viewport.bind("<Configure>", lambda _event: outer.after_idle(refresh_card_size), add="+")
+        if title:
+            tk.Label(inner, text=title, bg=SURFACE, fg=PRIMARY, font=(FONT_FAMILY, 15, "bold"), anchor="e", justify="right").pack(fill="x", pady=(0, 12))
+        outer.after_idle(refresh_card_size)
+        return inner
+
+    def _refresh_scrollable_popup(self, window):
+        refresh = getattr(window, "_scrollable_popup_refresh", None)
+        if callable(refresh):
+            try:
+                window.update_idletasks()
+                refresh()
+                window.update_idletasks()
+            except Exception:
+                pass
+
     def _action_button(self, parent, text, command, kind="primary", width=126, height=38):
         palette = {
             "primary": (PRIMARY, PRIMARY_HOVER, "#FFF7D6"),
@@ -3351,7 +3417,7 @@ class ApartmentCostsApp:
         w.withdraw()
         w.protocol("WM_DELETE_WINDOW", w.withdraw)
 
-        c = self._popup_card(w, "إبلاغ أو اقتراح", padx=20, pady=18)
+        c = self._scrollable_popup_card(w, "إبلاغ أو اقتراح", padx=20, pady=18)
         tk.Label(
             c,
             text="استخدم هذا النموذج لإرسال مشكلة تقنية، طلب ميزة، اقتراح تحسين، أو ملاحظة عامة.",
@@ -3385,12 +3451,14 @@ class ApartmentCostsApp:
         self.support_submit_button = self._action_button(actions, "إرسال", self.submit_support_message, width=112)
         self.support_submit_button.pack(side="right", padx=4)
         self._action_button(actions, "إغلاق", w.withdraw, kind="secondary", width=96).pack(side="right", padx=4)
-        self._fit_toplevel(w, 860, 760, 0.64, 0.90)
+        self._refresh_scrollable_popup(w)
+        self._fit_toplevel(w, 900, 880, 0.70, 0.94)
 
     def open_support_window(self):
         self._ensure_support_window()
         self.support_status_label.configure(text="")
-        self._fit_toplevel(self.support_window, 860, 760, 0.64, 0.90)
+        self._refresh_scrollable_popup(self.support_window)
+        self._fit_toplevel(self.support_window, 900, 880, 0.70, 0.94)
         self._reveal_window(self.support_window)
 
     def _set_support_form_enabled(self, enabled):
@@ -3516,7 +3584,7 @@ class ApartmentCostsApp:
         w.withdraw()
         w.protocol("WM_DELETE_WINDOW", w.withdraw)
 
-        c = self._popup_card(w, "إعدادات البرنامج")
+        c = self._scrollable_popup_card(w, "إعدادات البرنامج")
 
         form = ttk.Frame(c, style="Card.TFrame")
         form.pack(fill="x")
@@ -3579,7 +3647,8 @@ class ApartmentCostsApp:
         self._action_button(actions, "حذف الجهة", self.delete_payment_target, kind="danger", width=112).pack(side="right", padx=4)
         self._action_button(actions, "إدارة الأماكن", self.open_rooms_window, kind="secondary", width=124).pack(side="right", padx=4)
         tk.Label(c, text=COPYRIGHT_NOTICE, bg=SURFACE, fg=TEXT_2, font=(FONT_FAMILY, 9), anchor="center", justify="center").pack(fill="x", pady=(12, 0))
-        self._fit_toplevel(w, 900, 820, 0.68, 0.92)
+        self._refresh_scrollable_popup(w)
+        self._fit_toplevel(w, 960, 960, 0.74, 0.96)
 
     def open_settings_window(self):
         self._ensure_settings_window()
@@ -3596,7 +3665,8 @@ class ApartmentCostsApp:
         self.settings_party1_percent_var.set(f"{self.party1_percent:.0f}")
         self.settings_party2_percent_var.set(f"{self.party2_percent:.0f}")
         self.refresh_payment_target_widgets()
-        self._fit_toplevel(self.settings_window, 900, 820, 0.68, 0.92)
+        self._refresh_scrollable_popup(self.settings_window)
+        self._fit_toplevel(self.settings_window, 960, 960, 0.74, 0.96)
         self._reveal_window(self.settings_window)
 
     def update_settings_accounting_visibility(self):
