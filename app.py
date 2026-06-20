@@ -502,6 +502,8 @@ class RoundedTextInput(tk.Frame):
         self.child.pack(fill="both", expand=True)
         self._inner_window = self.canvas.create_window(14, 6, anchor="nw", window=self.inner)
         self.bind("<Configure>", self._draw, add="+")
+        for widget in (self, self.canvas, self.inner):
+            widget.bind("<Button-1>", lambda _event: self.child.focus_set(), add="+")
         for widget in (self, self.canvas, self.inner, self.child):
             widget.bind("<FocusIn>", self._focus_in, add="+")
             widget.bind("<FocusOut>", self._focus_out, add="+")
@@ -2813,6 +2815,7 @@ class ApartmentCostsApp:
             border_color="#D1D5DB",
             focus_color=PRIMARY,
             radius=10,
+            native=False,
         )
         self.notes_text.pack(fill="x")
 
@@ -5762,7 +5765,7 @@ class ApartmentCostsApp:
         if report_key == "furniture":
             rows = self.conn.execute(
                 """
-                SELECT id, item_name, room, quantity, unit_price, total, payer, shared_split, notes, updated_at
+                SELECT id, main_type, item_name, room, quantity, unit_price, total, payer, shared_split, notes, updated_at
                 FROM records
                 WHERE main_type='فرش'
                 ORDER BY updated_at DESC, id DESC
