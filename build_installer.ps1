@@ -13,7 +13,7 @@ if (!(Test-Path $Iscc)) {
 }
 
 if (!(Test-Path (Join-Path $ProjectRoot "dist\MarriageExpensesManager\MarriageExpensesManager.exe"))) {
-    & (Join-Path $ProjectRoot "build_portable.ps1")
+    & (Join-Path $ProjectRoot "build_portable.ps1") -Version $Version
 }
 
 $InstallerVersion = $Version.TrimStart([char[]]"vV")

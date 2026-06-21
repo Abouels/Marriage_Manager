@@ -1,3 +1,7 @@
+param(
+    [string]$Version = ""
+)
+
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -14,6 +18,17 @@ if ($SupportEndpoint) {
     Set-Content -Path $SupportEndpointFile -Value $SupportEndpoint -Encoding UTF8
 } elseif (Test-Path $SupportEndpointFile) {
     Remove-Item -LiteralPath $SupportEndpointFile -Force
+}
+
+$VersionFile = Join-Path $ProjectRoot "version.txt"
+$ResolvedVersion = "$Version".Trim()
+if (-not $ResolvedVersion) {
+    $ResolvedVersion = "$env:MARRIAGE_MANAGER_VERSION".Trim()
+}
+if ($ResolvedVersion) {
+    Set-Content -Path $VersionFile -Value $ResolvedVersion -Encoding UTF8
+} elseif (Test-Path $VersionFile) {
+    Remove-Item -LiteralPath $VersionFile -Force
 }
 
 $BuildDir = Join-Path $ProjectRoot "build"

@@ -12,6 +12,9 @@ datas = [
 support_endpoint = project_root / "support_endpoint.txt"
 if support_endpoint.exists():
     datas.append((str(support_endpoint), "."))
+version_file = project_root / "version.txt"
+if version_file.exists():
+    datas.append((str(version_file), "."))
 
 hiddenimports = [
     "PIL._tkinter_finder",
