@@ -5802,10 +5802,12 @@ class ApartmentCostsApp:
             messagebox.showerror("خطأ", f"حدث خطأ أثناء إنشاء التقرير:\n{e}")
 
     def _build_report_spec(self, report_key):
+        record_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(records)").fetchall()}
+        paid_at_select = "paid_at" if "paid_at" in record_columns else "NULL AS paid_at"
         if report_key == "furniture":
             rows = self.conn.execute(
-                """
-                SELECT id, main_type, item_name, room, quantity, unit_price, total, paid_at, payer, shared_split, notes, updated_at
+                f"""
+                SELECT id, main_type, item_name, room, quantity, unit_price, total, {paid_at_select}, payer, shared_split, notes, updated_at
                 FROM records
                 WHERE main_type='فرش'
                 ORDER BY updated_at DESC, id DESC
@@ -5820,16 +5822,16 @@ class ApartmentCostsApp:
                     self._fmt_num(row["quantity"]),
                     self._fmt_money(row["unit_price"]),
                     self._fmt_money(row["total"]),
-                    row["paid_at"] or "-",
                     row["payer"] or self.user_name,
                     self.record_accounting_label(row),
+                    row["paid_at"] or "-",
                 ])
             total = sum(row["total"] for row in rows)
             return {
                 "title": "تقرير الفرش",
                 "columns": [
                     ("م", 28), ("البند", 150), ("المكان", 72), ("العدد", 44),
-                    ("سعر الوحدة", 70), ("الإجمالي", 72), ("تاريخ الدفع", 78), ("الدافع", 66), ("المشاركة", 76),
+                    ("سعر الوحدة", 70), ("الإجمالي", 72), ("الدافع", 66), ("المشاركة", 76), ("تاريخ الدفع", 78),
                 ],
                 "rows": data,
                 "summary": [("إجمالي الفرش", self._fmt_money(total)), ("عدد البنود", str(len(rows)))],
@@ -5887,8 +5889,8 @@ class ApartmentCostsApp:
             }
         if report_key == "finishing":
             rows = self.conn.execute(
-                """
-                SELECT id, finish_type, item_name, room, quantity, unit_price, total, paid_at, notes, updated_at
+                f"""
+                SELECT id, finish_type, item_name, room, quantity, unit_price, total, {paid_at_select}, notes, updated_at
                 FROM records
                 WHERE main_type='تشطيب'
                 ORDER BY updated_at DESC, id DESC
